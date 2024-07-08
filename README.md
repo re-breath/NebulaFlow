@@ -48,8 +48,8 @@ NebulaFlow can be used to enter various commands in the Linux environment. The p
   * Use source $HOME/.bashrc after installation. If it shows NebulaFlow library loaded O. < and there is no error, the installation is successful.
   * Note that there may be a format problem after window is converted to linux during installation, resulting in an error. You can use dos2unix~/.rebreath/* to try to fix the format problem.
 ```shell
-tar -zxvf NebulaFlow-1.0.tar.gz
-cd NebulaFlow-1.0.tar.gz
+tar -zxvf NebulaFlow-1.0.0.tar.gz
+cd NebulaFlow-1.0.0.tar.gz
 bash NebulaFlowinstaller.sh
 source ~/.bashrc
 ```
