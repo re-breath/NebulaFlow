@@ -125,38 +125,6 @@ plt.savefig('plot.png', format='png')
 EOF
 }
 
-proxy_download() {
-#该函数的作用为使用代理节点下载文件
-    local remote_server="dhk@10.14.0.15" 
-    local remote_path="/home/dhk/rebreath/proxy_downfiles" 
-    local remote_temp_path="${remote_path}/temp" 
-
-    # 用ssh在远程服务器的临时目录创建目录并下载文件
-    ssh -i ~/.ssh/id_rsa ${remote_server} "mkdir -p ${remote_temp_path} && cd ${remote_temp_path} && $1"
-    
-    # 检查远程下载命令的返回值
-    if [[ "$?" -ne 0 ]]; then
-        echo "文件下载失败，请检查命令并重试。"
-        return 1
-    fi
-    
-    # 使用scp从临时文件夹复制所有文件到本地当前目录下
-    scp -rv -i ~/.ssh/id_rsa ${remote_server}:${remote_temp_path}/* .
-    
-    # 检查scp命令的返回值
-    if [[ "$?" -ne 0 ]]; then
-        echo "文件复制失败，请检查远程服务器上的路径和文件名。"
-        return 1
-    fi
-
-    # 清空远程服务器中的临时目录
-    ssh -i ~/.ssh/id_rsa ${remote_server} "rm -rf ${remote_temp_path}/*"
-
-    echo "文件已成功下载到本地并清理了临时文件夹。"
-}
-
-#关闭vasp组件未使用警告
-export OMPI_MCA_btl_base_warn_component_unused=0
 
 free_time_run() {
 #监测到空闲的gpu后进行任务
