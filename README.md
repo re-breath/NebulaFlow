@@ -53,7 +53,7 @@ cd NebulaFlow-1.0.tar.gz
 bash NebulaFlowinstaller.sh
 source ~/.bashrc
 ```
-## 使用要求
+## Requirement
 
 * 要求linux中可以使用python3,内置命令默认使用python3。
 
