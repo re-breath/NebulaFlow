@@ -5,9 +5,16 @@
 export PATH=$PATH:$HOME/.rebreath
 alias loadenv='source ~/.bashrc'
 alias modenv='vim ~/.bashrc'
+alias modrenv='vim ~/.rebreath/rebreath-env-function'
 export PYTHONPATH=$PYTHONPATH:$HOME/.rebreath/nebula_pylib
-#处理数据集数据的快捷键，可以使用来处理dump文件的数据
+module load compiler/gcc/12.2.0 2> /dev/null || true
 
+
+#关闭vasp组件未使用警告
+export OMPI_MCA_btl_base_warn_component_unused=0
+
+
+#处理数据集数据的快捷键，可以使用来处理dump文件的数据
 
 get_energy(){
 #获得xyz文件中的所有的能量
@@ -91,10 +98,6 @@ check_hnemd_thermo(){
     tail -n 1 average_ther.out | awk '{print $10,$11,$12}'
 }
 
-use_agent(){
-    export http_proxy="http://192.168.1.10:3128"
-}
-
 replot() {
 #该函数将指定文件的前两列进行画图
     if [ "$#" -ne 1 ]; then
@@ -124,8 +127,6 @@ plt.ylabel('Y')
 plt.savefig('plot.png', format='png')
 EOF
 }
-
-
 free_time_run() {
 #监测到空闲的gpu后进行任务
   while true; do
@@ -645,7 +646,7 @@ echo "NebulaFlow library loaded" 'O.<'
 
 #-----------------------------模板-----------------------------------
 
-module load compiler/gcc/12.2.0 || true
+
 
 compute_high_of_tree() {
 # 创建一个临时文件夹来保存生成的文件
@@ -694,4 +695,3 @@ popd
 # 删除临时文件夹及其内容
 rm -rf "$tmpdir"
 }
-
