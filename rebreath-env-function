@@ -493,7 +493,7 @@ echo "#!/bin/bash
 # MARK_CMD
 source /work/home/rebreath/sbatch_need/gpumd_env.sh
 /work/share/acmtrwrxv5/GPUMD/src/gpumd" | sbatch -J "$job_name"
-EOF
+
 }
 
 #+++++++++++++++++++++++++++nep训练集相关+++++++++++++++++++++++++++++++++
