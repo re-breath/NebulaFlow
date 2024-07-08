@@ -8,7 +8,7 @@
 
 * NebulaFlow is a command-line tool that assists molecular dynamics (MD) first-principles (DFT) calculations. A large number of commands are set up internally to assist in the completion of calculations and post-computational data processing.
 
-## NebulaFlow有什么用
+## What is the use of NebulaFlow?
 
 * 帮助广大的科研工作者简化工作流程，以及降低处理数据的门槛，在我刚入门的时候，总是无法处理计算后的数据，面对github上很多库却不知道如何使用，使用NebulaFlow可以解决这个问题，只需要在命令行中敲出一个命令就能完成一系列的任务，无需再为不知道如何处理相关任务而烦恼。
 
@@ -18,7 +18,7 @@
 
 * The core of NebulaFlow is to use the shell to control Python, C++ and other languages, so as to achieve a variety of functions, which can greatly reduce the learning cost when using.
 
-## NebulaFlow目前支持的计算
+## NebulaFlow currently supports computing
 
 * 目前支持GPUMD与VASP相关的计算，主要包括GPUMD构建训练集与训练NEP等的各种操作，以及VASP计算单点能等计算。
 * At present, GPUMD and VASP-related calculations are supported, including various operations such as GPUMD building training datasets and training NEP, as well as VASP computing single point energy and other calculations.
@@ -26,18 +26,24 @@
 * 本项目立志成为宇宙第一辅助数据处理的项目，以后会逐渐添加对更多计算的支持。
 * This project aspires to become the first auxiliary data processing project in the universe, and will gradually add support for more calculations in the future.
 
-## NebulaFlow 使用方法
+## How to use NebulaFlow
 
-* 筛选NEP训练集
-  * ```screening_reasonable_forces```
-    * 筛选nep的训练集，将训练集的合理的构型提取出，使用的方法为 screening_reasonable_forces xyzfile min_force max_force
-    * Filter nep's training dataset, extract the reasonable configuration of the training dataset, using the method of screening_reasonable_forces xyzfile min_force max_force
-      
-  * ```screening_reasonable_energy```
-    * 筛选nep的训练集，将训练集的合理的能量提取出,使用的方法为 screening_reasonable_energy xyzfile min_energy max_energy
+NebulaFlow使用方法为在linux环境下输入各种命令即可，目的是使用一行简单的命令完成一系列复杂的任务，详细的使用方法如下：
 
+[点击这里查看中文版使用手册](https://github.com/re-breath/NebulaFlow/blob/main/Manual/use_detail_Chinese.md)
 
-  * ```screening_reasonable_virial```
-    * 筛选nep的训练集，将训练集的合理的位力提取出,使用的方法为 screening_reasonable_virial xyzfile min_strain max_strain
-    * Filter the training dataset of nep, and extract the reasonable potential force of the training dataset, using the method of screening_reasonable_virial xyzfile min_strain max_strain
-      
+NebulaFlow can be used to enter various commands in the Linux environment. The purpose is to complete a series of complex tasks with a single simple command. The detailed usage method is as follows:
+
+[Click here to view the English version of the user manual](https://github.com/re-breath/NebulaFlow/blob/main/Manual/use_detail_English.md)
+
+## Install NebulaFlow
+
+* 使用NebulaFlowinstaller.sh脚本进行一键安装
+* 安装方法： bash NebulaFlowinstaller.sh
+  * 安装后使用 source $HOME/.bashrc，如果显示为 NebulaFlow library loaded O.<，并且无任何报错则代表安装成功。
+  * 注意安装中可能会出现window转为linux后的格式问题而导致报错，可以使用dos2unix ~/.rebreath/*来尝试修复格式问题。
+ 
+* Use NebulaFlowinstaller.sh script for one-click installation
+* Installation method: bash NebulaFlowinstaller.sh
+  * Use source $HOME/.bashrc after installation. If it shows NebulaFlow library loaded O. < and there is no error, the installation is successful.
+  * Note that there may be a format problem after window is converted to linux during installation, resulting in an error. You can use dos2unix~/.rebreath/* to try to fix the format problem.
