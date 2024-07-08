@@ -47,3 +47,18 @@ NebulaFlow can be used to enter various commands in the Linux environment. The p
 * Installation method: bash NebulaFlowinstaller.sh
   * Use source $HOME/.bashrc after installation. If it shows NebulaFlow library loaded O. < and there is no error, the installation is successful.
   * Note that there may be a format problem after window is converted to linux during installation, resulting in an error. You can use dos2unix~/.rebreath/* to try to fix the format problem.
+
+## 使用要求
+
+* 要求linux中可以使用python3,内置命令默认使用python3。
+
+* NebulaFlow使用shell调用了各种python库对文件进行处理，其很多命令无需任何python库也能实现，但是一些特殊的函数调用了部分库，只需要看起报错时候的提示需要哪些库即可。
+
+* 可能用到的库有matplotlib,numpy,pylab,calorine,gpyumd,ase,gpumd-wizard等库，用到时候再进行下载即可
+
+* Required to use python3 in linux, built-in commands use python3 by default.
+
+NebulaFlow uses the shell to call various Python libraries to process files, and many of its commands can be implemented without any Python libraries. However, some special functions call some libraries, and you only need to see which libraries are required when the error is reported.
+
+* Libraries that may be used include matplotlib, numpy, pylab, calorine, gpyumd, ase, gpump-wizard and other libraries. You can download them when you use them.
+
