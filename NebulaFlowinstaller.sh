@@ -2,7 +2,7 @@
 
 mkdir -p $HOME/.rebreath
 
-rsync -av --update . $HOME/.rebreath/
+rsync -av --update . $HOME/.rebreath/  ||  cp -r * "$HOME/.rebreath/"
 
 echo 'export PATH=$PATH:$HOME/.rebreath' >> $HOME/.bashrc
 
