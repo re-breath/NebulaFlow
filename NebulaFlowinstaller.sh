@@ -4,7 +4,7 @@ mkdir -p $HOME/.rebreath
 
 rsync -av --update . $HOME/.rebreath/
 
-echo "export PATH=$PATH:$HOME/.rebreath" >> $HOME/.bashrc
+echo 'export PATH=$PATH:$HOME/.rebreath' >> $HOME/.bashrc
 
 echo '
 #rebreath的函数库
