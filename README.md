@@ -1,5 +1,5 @@
 
-![image](https://github.com/re-breath/NebulaFlow/blob/main/logo/NebulaFlow-logo.png)
+![NebulaFlow Logo](logo/NebulaFlow-logo.png)
 
 
 ## What is NebulaFlow?
