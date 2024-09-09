@@ -10,7 +10,7 @@
 
 ## What is the use of NebulaFlow?
 
-* 帮助广大的科研工作者简化工作流程，以及降低处理数据的门槛，在刚入门的时候，很容易出现无法处理计算后的数据，面对github上很多库却不知道如何使用的情况，使用NebulaFlow可以解决这个问题，只需要在命令行中敲出一个命令就能完成一系列的任务，无需再为不知道如何处理相关任务而烦恼。
+* 帮助广大的科研工作者简化工作流程，以及降低处理数据的门槛，在我刚入门的时候，总是无法处理计算后的数据，面对github上很多库却不知道如何使用，使用NebulaFlow可以解决这个问题，只需要在命令行中敲出一个命令就能完成一系列的任务，无需再为不知道如何处理相关任务而烦恼。
 
 * To help the majority of scientific researchers simplify their workflow and lower the threshold for processing data, when I first started, I was always unable to handle the calculated data. In the face of many libraries on GitHub, I did not know how to use them. Using NebulaFlow can solve this problem by simply typing a command on the command line to complete a series of tasks, without having to worry about not knowing how to handle related tasks.
 
