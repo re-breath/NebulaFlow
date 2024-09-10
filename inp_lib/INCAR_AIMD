@@ -1,0 +1,38 @@
+ SYSTEM =  AiN_aimd 
+
+INCAR-basic
+   PREC   = Normal
+   ENCUT  = 400 eV
+   NELMIN= 5
+   LREAL = F
+
+#   ALGO = Fast
+   EDIFF  = 1E-5
+#  ISMEAR = 0
+   SIGMA = 0.2
+
+    GGA = PE
+#   LDAU=.TRUE.  ## For LDA + U set
+#   LDAUTYPE=2
+#   LDAUL=2 -1
+#   LDAUU=3  0
+#   LDAUJ=0  0
+
+   ISPIN = 1    ## For magnetism set
+#  MAGMOM = 3*1
+   NCORE = 2     ## Important to reduce calculate time, equal sqrt(cpu cores)
+ 
+Molecular Dynamics
+   NSW = 500
+   IBRION = 0
+   POTIM = 2     Time step: fs
+   ISYM=0
+
+   LCHARG = .FALSE.
+   LWAVE  =  F
+
+   NBLOCK= 1
+   KBLOCK=500
+   TEBEG = replace   Start temperature
+   TEEND = replace    End temperature 
+   SMASS=0  ! NVT

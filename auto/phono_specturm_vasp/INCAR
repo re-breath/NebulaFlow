@@ -1,0 +1,24 @@
+SYSTEM=opt
+
+#Start Parameters
+PREC=Accurate
+ISTART=0
+ICHARG=2
+
+#Electronic Relaxation
+NELM=60;NELMIN=4;NELMDL=-3
+EDIFF=1E-6
+LREAL=False
+ENCUT=500
+
+#Ionic Relaxation
+EDIFFG=1e-9
+NSW=520
+IBRION=1
+ISIF=2
+
+#KSPACING=0.2
+NPAR = 4
+
+#DOS Related Values
+ISMEAR=0;SIGMA=0.01
