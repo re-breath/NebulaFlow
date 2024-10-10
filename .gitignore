@@ -1,0 +1,10 @@
+# 忽略 whl_files 文件夹
+whl_files/
+
+# 忽略 .vscode 文件夹
+.vscode/
+
+# 忽略 lab 文件夹
+lab/
+
+logo/NebulaFlow.psd
