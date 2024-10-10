@@ -1,0 +1,48 @@
+#!/bin/sh
+#本脚本可将cif文件转化为笛卡尔坐标的POSCAR，带有晶格参数的first.xyz，CP2K输入文件coord.inc
+#原理：调用Multiwfn先产生带有晶格参数的first.xyz
+#对其进行格式重排即可
+
+#https://cloud.tencent.com/developer/article/1629932
+while getopts ":h" optname
+do
+    case "$optname" in
+      "h")
+        echo "#本脚本可将cif文件转化为笛卡尔坐标的POSCAR，带有晶格参数的first.xyz，CP2K输入文件coord.inc
+#原理：调用Multiwfn先产生带有晶格参数的first.xyz
+#对其进行格式重排即可"
+	exit
+        ;;
+      ":")
+        echo "No argument value for option $OPTARG"
+        ;;
+      "?")
+        echo "Unknown option $OPTARG"
+        ;;
+      *)
+        echo "Unknown error while processing options"
+        ;;
+    esac
+    #echo "option index is $OPTIND"
+done
+
+(echo 100; echo 2; echo 2; echo first.xyz) | Multiwfn $1 >/dev/null 2>&1
+cp first.xyz coord.inc
+sed -i '1,2d' coord.inc
+#查看coord.inc | 只取第一列的元素符号 | 统计元素符号和对应的数目 | 交换元素和原子数的列 | 行专列，列转行
+#具体见https://blog.csdn.net/reyleon/article/details/13018119
+
+cat coord.inc | awk '{print $1}' | uniq -c | awk '{print $2,$1}'|\
+ awk '{for(i=1;i<=NF;i++)a[NR,i]=$i}END{for(j=1;j<=NF;j++)for(k=1;k<=NR;k++)printf k==NR?a[k,j] RS:a[k,j] FS}' \
+> ele_num
+
+sed -n 1p ele_num > POSCAR
+echo 1.0 >> POSCAR
+sed -n 2p first.xyz | awk '{print $2,$3,$4}' | awk -F " "  '{for (i=1;i<=NF;i++)printf("%10s ", $i);print ""}' >> POSCAR
+sed -n 2p first.xyz | awk '{print $6,$7,$8}' | awk -F " "  '{for (i=1;i<=NF;i++)printf("%10s ", $i);print ""}'>> POSCAR
+sed -n 2p first.xyz | awk '{print $10,$11,$12}' | awk -F " "  '{for (i=1;i<=NF;i++)printf("%10s ", $i);print ""}' >> POSCAR
+cat ele_num | awk -F " "  '{for (i=1;i<=NF;i++)printf("%6s ", $i);print ""}' >> POSCAR
+echo Cartesian >> POSCAR
+cat coord.inc | awk '{print $2,$3,$4}' | awk -F " "  '{for (i=1;i<=NF;i++)printf("%20s ", $i);print ""}' >> POSCAR
+
+
