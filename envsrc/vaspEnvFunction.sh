@@ -1,11 +1,3 @@
-#!/bin/bash
-#from rebreath
-
-
-#画图模块
-
-
-
 
 generate_band_plot() {
     #函数说明：该函数用来指定DFPT的band.yaml文件拿来画图
