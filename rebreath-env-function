@@ -1,7 +1,7 @@
 #rebreath的函数库
 #环境变量部分的函数
 #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-source envsrc/*
+
 echo "#env setting"> ~/.rebreath/.config
 source ~/.rebreath/.config
 export PATH=$PATH:$HOME/.rebreath
@@ -9,8 +9,12 @@ alias loadenv='source ~/.bashrc'
 alias modenv='vim ~/.bashrc'
 alias py='python3'
 export PYTHONPATH=$PYTHONPATH:$HOME/.rebreath/nebula_pylib
-module load compiler/gcc/12.2.0 2> /dev/null || true
+#module load compiler/gcc/12.2.0 2> /dev/null || true
 alias modrenv='vim ~/.rebreath/rebreath-env-function'
+
+while IFS= read -r -d '' file; do
+    source "$file"
+done < <(find ~/.rebreath/envsrc -type f -print0)
 
 #关闭vasp组件未使用警告
 export OMPI_MCA_btl_base_warn_component_unused=0
