@@ -171,35 +171,23 @@ EOF
 
 }
 
-get_area_of_xy_and_volume() {
-# 计算xy的晶面积,并顺便的计算出斜胞的体积(注意文件对象为gpumd风格的xyz文件)
-# 输出一个文件 Volume_area_xy.txt, 第一列为斜胞体积，第二列为xy面的面积
-# 注意该函数为临时函数，只计算xy平面的面积，为计算CaF2使用ase进行切片后的固定晶面所需，提交时候需要谨慎考虑
-    local file=$1
-    get_Lattice $1 |awk -F "=" '{print $2}' | sed 's/"//g'  > lattic.log
+analysis_column(){
+    # 该函数用来分析一个文件中的某一列数据，并输出其最大值，最小值，绝对最大值，绝对最小值，平均值，标准差
+    local filename=$1
+    local column_num=$2
+    local skiprows=${3:-'0'}
     python3 << EOF
 import numpy as np
-filename = 'lattic.log'
-data = np.loadtxt(filename)
-la = data[:,:3]
-lb = data[:,3:6]
-lc = data[:,6:9]
-def get_area_xy(la,lb,lc):
-    """
-    计算xy面的面积(使用叉乘法)
-    """
-    areas = np.zeros(len(la))
-    vols = np.zeros(len(la))
-    for i in range(len(la)):
-        temp = np.cross(la[i],lb[i])
-        areas[i] = np.linalg.norm(temp)
-        vols[i] = np.dot(lc[i],temp)
-
-    return areas,vols
-
-areas ,vols = get_area_xy(la,lb,lc)
-
-np.savetxt('Volume_area_xy.txt',np.column_stack((vols,areas)))
+filename = '$1'
+data = np.loadtxt(filename,skiprows=$skiprows)
+column_num = $column_num - 1 
+data = data[:,column_num] 
+print('最大值:',np.max(data))
+print('最小值:',np.min(data))
+print('绝对最大值:',np.max(np.abs(data)))
+print('绝对最小值:',np.min(np.abs(data)))
+print('平均值:',np.mean(data))
+print('标准差:',np.std(data))
 EOF
 }
 
@@ -229,31 +217,22 @@ if __name__ == '__main__':
 EOF
 }
 
-xyz_to_cif () 
-#该函数可能会出问题
-{ 
-    python3 - "$1" "$2" <<'EOF'
+xyz_to_cif (){ 
+    #其实不只是xyz到cif，很多其他的格式也可以到达cif的格式，ase，让我看看你的实力了
+    #不过注意xyz文件如果想要使用ovito来进行转化的时候需要注意，最好只输出xyz方向的坐标，多了其他的东西可能会无法识别。
+    cifname={2:-'file.cif'}
+    python3  <<'EOF'
 from ase.io import read, write
 
 def convert(file_in, file_out):
     # 读取XYZ文件
     atoms = read(file_in)
-    
     # 输出为CIF文件
     write(file_out, atoms)
-
-if __name__ == '__main__':
-    import sys
-    if len(sys.argv) != 3:
-        print("Usage: python $0 <input.xyz> <output.cif>")
-        sys.return(1)
-    
-    file_in = sys.argv[1]
-    file_out = sys.argv[2]
-    
-    convert(file_in, file_out)
+infile = '$1'
+outfile = '$cifname
+convert(infile, outfile)
 EOF
-
 }
 
 select_xyz_config(){
@@ -700,4 +679,27 @@ average_file_c(){
     ./average_file "$@" 
     rm -f average_file
     mv average.out average_${avg_name}.out
+}
+
+
+
+generate_large_primes() {
+    # 辅助函数：生成大于10000的质数列表
+    local count=$1
+    local primes=()
+    local num=${2:-10001}
+    while [ ${#primes[@]} -lt $count ]; do
+        local is_prime=1
+        for ((j=2; j*j<=num; j++)); do
+            if [ $((num % j)) -eq 0 ]; then
+                is_prime=0
+                break
+            fi
+        done
+        if [ $is_prime -eq 1 ]; then
+            primes+=($num)
+        fi
+        num=$((num + 1))
+    done
+    echo "${primes[@]}"
 }

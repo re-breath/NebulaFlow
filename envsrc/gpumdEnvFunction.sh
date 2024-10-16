@@ -9,6 +9,7 @@ screening_reasonable_forces(){
     local deal_lib="$HOME/.rebreath/deal_data/"
     python3 $deal_lib/elect_rely_force.py $1  $2  $3
 }
+
 screening_reasonable_energy(){
 #筛选nep的训练集，将训练集的合理的能量提取出
 #使用的方法为 screening_reasonable_energy xyzfile min_energy max_energy
@@ -95,15 +96,39 @@ start_mul_hnemd(){
     local times=$((times-1))
     local core_num=${3:-1}
     local init_address=$PWD
-    for i in $(seq 0 $times);do
+    for i in $(seq 1 $times);do
         mkdir -p hnemd_${i}
         cp $nepfile model.xyz run.in hnemd_${i}/
         cd hnemd_${i}
-        gpumd_dcu_394 -n $core_num
+        #gpumd_dcu_394 -n $core_num
         cd $init_address
     done
 }
+start_mul_hnemd() {
+    # 该函数用来启动gpumd的hnemd方法来计算热导率，可以进行制定次数的热导率的计算
+    # 使用方法：start_mul_hnemd nep.txt 6 1 将会使用gpumd进行6次热导率的计算，每个计算使用1个核
+    local nepfile=${1:-nep.txt}
+    local times=${2:-6}
+    local core_num=${3:-1}
+    local init_address=$PWD
 
+    # 生成大于10000的质数列表
+    local prime_seeds=($(generate_large_primes $times 30001))
+
+    for i in $(seq 1 $((times-1))); do
+        mkdir -p hnemd_${i}
+        cp $nepfile model.xyz run.in hnemd_${i}/
+        cd hnemd_${i}
+
+        # 替换 run.in 中的 seed 值
+        sed -i "s/seed.*$/seed ${prime_seeds[$i]}/" run.in
+
+        # 运行 gpumd (示例命令，根据实际情况调整)
+        gpumd_dcu_394 -n $core_num
+
+        cd $init_address
+    done
+}
 
 deal_strain_fluctuation_to_elastic(){
 #该函数用来处理应变波动法计算弹性模量得到的thermo文件，计算出其中的弹性模量
@@ -276,6 +301,48 @@ EOF
 fi
 }
 
+get_area_of_xy_and_volume() {
+# 计算xy的晶面积,并顺便的计算出斜胞的体积(注意文件对象为gpumd风格的xyz文件)
+# 输出一个文件 Volume_area_xy.txt, 第一列为斜胞体积，第二列为xy面的面积
+# 注意该函数为临时函数，只计算xy平面的面积，为计算CaF2使用ase进行切片后的固定晶面所需，提交时候需要谨慎考虑
+    local file=$1
+    get_Lattice $1 |awk -F "=" '{print $2}' | sed 's/"//g'  > lattic.log
+    python3 << EOF
+import numpy as np
+filename = 'lattic.log'
+data = np.loadtxt(filename)
+la = data[:,:3]
+lb = data[:,3:6]
+lc = data[:,6:9]
+def get_area_xy(la,lb,lc):
+    """
+    计算xy面的面积(使用叉乘法)
+    """
+    areas = np.zeros(len(la))
+    vols = np.zeros(len(la))
+    for i in range(len(la)):
+        temp = np.cross(la[i],lb[i])
+        areas[i] = np.linalg.norm(temp)
+        vols[i] = np.dot(lc[i],temp)
+
+    return areas,vols
+
+areas ,vols = get_area_xy(la,lb,lc)
+
+np.savetxt('${file}_Volume_area_xy.txt',np.column_stack((vols,areas)))
+EOF
+    rm -f lattic.log
+}
+
+
+plot_E-frame(){
+    # 该函数使用来直接画出能量的变化图
+    get_energy $1 > E.log
+    seq $(wc -l E.log | awk '{print $1}') > frame.log
+    paste frame.log E.log > E-frame.txt
+    replot E-frame.txt
+    rm -f frame.log E.log
+}
 
 check_hnemd_thermo(){
 #检查hnemd的thermo输出文件，并输出平均值,输出最后的晶格参数
