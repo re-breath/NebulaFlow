@@ -10,7 +10,7 @@ mkdir  -p average_hnemd/shc
 function granularity(){
     local m=0
     file_column=0
-    for i in $(find $init_address -type d -regex  ".*hnemd[\._]?[0-9]+" | sort -t '_' -k 2 -n);do
+    for i in $(find $init_address -maxdepth 1 -type d -regex  ".*hnemd[\._]?[0-9]+" | sort -t '_' -k 2 -n);do
         basei=$(basename $i)
         file_column=$(awk '{print NF}' $i/kappa.out)
         add_name=$(grep -oE '[0-9]+' <<< $basei | tail -n 1)
@@ -59,27 +59,27 @@ check_Rows_and_columns() {
     done
 }
 
-average_file(){                  
-    files_num="$#"
-    tmp_file='temp'
-    paste "$@" >$tmp_file
-    # 逐行读取处理
-    while IFS= read -r line
-    do
-        echo "$line" | awk -v files_num="$files_num" '{
-            sum=0;
-            for(i=1; i<=NF/files_num; i++){
-                sum=0;
-                for(j=0; j<files_num; j++){
-                    sum += $(i+j*NF/files_num)
-                }
-                printf "%.15f\t", sum/files_num;  
-            }
-            printf "\n";
-        }'
-    done < "$tmp_file" >average.out
-    rm -f "$tmp_file"
-}
+# average_file(){                  
+#     files_num="$#"
+#     tmp_file='temp'
+#     paste "$@" >$tmp_file
+#     # 逐行读取处理
+#     while IFS= read -r line
+#     do
+#         echo "$line" | awk -v files_num="$files_num" '{
+#             sum=0;
+#             for(i=1; i<=NF/files_num; i++){
+#                 sum=0;
+#                 for(j=0; j<files_num; j++){
+#                     sum += $(i+j*NF/files_num)
+#                 }
+#                 printf "%.15f\t", sum/files_num;  
+#             }
+#             printf "\n";
+#         }'
+#     done < "$tmp_file" >average.out
+#     rm -f "$tmp_file"
+# }
 
 
 
