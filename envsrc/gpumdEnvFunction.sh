@@ -104,6 +104,7 @@ start_mul_hnemd(){
         cd $init_address
     done
 }
+
 start_mul_hnemd() {
     # 该函数用来启动gpumd的hnemd方法来计算热导率，可以进行制定次数的热导率的计算
     # 使用方法：start_mul_hnemd nep.txt 6 1 将会使用gpumd进行6次热导率的计算，每个计算使用1个核
@@ -113,7 +114,7 @@ start_mul_hnemd() {
     local init_address=$PWD
 
     # 生成大于10000的质数列表
-    local prime_seeds=($(generate_large_primes $times 30001))
+    local prime_seeds=($(generate_large_primes $times 10001))
 
     for i in $(seq 1 $((times-1))); do
         mkdir -p hnemd_${i}
