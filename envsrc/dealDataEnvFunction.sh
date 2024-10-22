@@ -133,6 +133,8 @@ filename = '$filename'
 
 def export_plot_data(listx,listy,filename:str):
     #该函数接受列表x与列表y,将列表x与列表y写入文件第一列与第二列
+    listx = [int(x) for x in listx]
+    listy = [int(y) for y in listy]
     date = np.column_stack((listx,listy))
     #print(date)
     np.savetxt(filename,date,delimiter=' ')
@@ -154,18 +156,29 @@ def plot_grain_zone(filename):
     
     grain_cout = []
     frames = []
+    crystal_atoms = []
 
     for frame_index in range(pipeline.source.num_frames):
         data = pipeline.compute(frame_index)
         frames.append(frame_index)
+        crystal_atoms.append(data.attributes['PolyhedralTemplateMatching.counts.$itype_upper'])
         grain_cout.append(data.attributes['GrainSegmentation.grain_count'])
     
+    export_plot_data(frames,crystal_atoms,'crystal_atoms_${filename%.*}.txt')
     export_plot_data(frames,grain_cout,'grain_count_${filename%.*}.txt')
     # 绘制晶粒数量变化的图
     plt.plot(frames, grain_cout)
     plt.xlabel('Frame')
     plt.ylabel('Grain Count')
     plt.savefig('grain_count_${filename%.*}.png')
+    plt.close()
+
+    plt.plot(frames, crystal_atoms)
+    plt.xlabel('Frame')
+    plt.ylabel('Crystal Atoms')
+    plt.savefig('crystal_atoms_${filename%.*}.png')
+    plt.close()
+
 plot_grain_zone(filename)
 EOF
 
@@ -332,6 +345,8 @@ crystal_type = '$itype_upper'
 matplotlib.use('Agg')
 def export_plot_data(listx,listy,filename:str):
     #该函数接受列表x与列表y，将列表x与列表y写入文件第一列与第二列
+    listx = [int(x) for x in listx]
+    listy = [int(y) for y in listy]
     date = np.column_stack((listx,listy))
     #print(date)
     np.savetxt(filename,date,delimiter=' ')
