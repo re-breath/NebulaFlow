@@ -36,7 +36,7 @@ class Config:
             lattice = [float(i) for i in lattice_str.split()]
         if match_virial:
             virial_str = match_virial.group(1)
-            virial = [float(i) for i in virial_str.split()]
+            virial = np.array([float(i) for i in virial_str.split()])
         if match_energy:
             energy = float(match_energy.group(1))  
         return lattice,virial,energy
