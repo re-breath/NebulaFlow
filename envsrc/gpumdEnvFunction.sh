@@ -30,7 +30,54 @@ plot_nep(){
     python3 ~/.rebreath/plot_library/hplt_nep_results.py
 }
 
-#+++++++++++++++++++++++++++gpumd相关+++++++++++++++++++++++++++++++++
+plot_E_F_Vir_distribution(){
+#画出类似nep的数据集中能量、力、位力分布的图
+#使用方法：plot_E_F_Vir_distribution train.xyz
+
+    local dump_file=${1:-train.xyz}
+    > plot_E_F_Vir_distribution.py
+    cat >> plot_E_F_Vir_distribution.py << EOF
+import nebula
+import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib import rc
+
+font = {'weight' : 'bold',  'size' : 7}
+rc('font', **font)
+
+configs = nebula.read_xyz('train_all.xyz')
+plt.figure(figsize=(12, 4))
+
+plt.subplot(1, 3, 1)
+E_avg = [float(config.energy / config.atom_num) for config in configs]
+plt.hist(E_avg, bins=300, alpha=0.5,color='#835593FF')
+plt.xlabel('Average Energy (eV/atom)',fontweight='bold')
+plt.ylabel('Frequency',fontweight='bold')
+
+# 画出力分布
+plt.subplot(1, 3, 2)
+color_force = ['#2CAC15FF','#2C3460FF','#1A87ABFF']
+F_avg = np.concatenate([config.force for config in configs])
+plt.hist(F_avg, bins=100, alpha=0.5,color=['#2CAC15FF','#2C3460FF','#1A87ABFF'])
+plt.xlabel('Interatomic Force (eV/$\AA$)',fontweight='bold')
+
+plt.ylabel('Frequency',fontweight='bold')
+
+color_viral = ['#00CED1FF','#FFA500FF','#FF4500FF']
+plt.subplot(1, 3, 3)
+vir_avg = np.concatenate([np.array(config.virial[::3]) / config.atom_num for config in configs])
+vir_avg = np.column_stack((vir_avg[::3],vir_avg[1::3],vir_avg[2::3]))
+
+plt.hist(vir_avg, bins=300, alpha=0.5)
+plt.xlabel('Average Viral (eV/atom)',fontweight='bold')
+plt.ylabel('Frequency',fontweight='bold')   
+plt.tight_layout()
+plt.savefig('E_F_vir.png',dpi=600)
+plt.close()
+EOF
+python3 plot_E_F_Vir_distribution.py
+}
+
 
 plot_hnemd(){
 #该函数用来画hnemd的图像，自动识别路径中的的_{xyz},以此来对特定方向的hnemd画图

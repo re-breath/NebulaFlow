@@ -396,6 +396,63 @@ setup_and_save_plot(file_list)
 EOF
 }
 
+analysis_grains_size(){
+# 该函数使用来分析模型文件中的晶粒大小，其将会分析某种特定的晶粒类型（如FCC）的每个晶粒中该类型的原子数量，并将其保存到文件中
+# 该函数的使用方法为 analysis_grains_size FCC model.xyz 会出书每个FCC晶粒中的FCC的原子的数量。
+    crystal_type="OTHER FCC HCP BCC ICO SC CUBIC_DIAMOND HEX_DIAMOND GRAPHENE"
+
+    itype=$1
+    argfile=$2
+    # 将 itype 转换为大写
+    itype_upper=$(echo "$itype" | tr '[:lower:]' '[:upper:]')
+
+    # 检查 itype_upper 是否在 crystal_type 列表中
+    if [[ ! $crystal_type =~ (^|[[:space:]])"$itype_upper"($|[[:space:]]) ]]; then
+        echo "Error: $itype_upper is not a valid crystal type."
+        echo "Valid crystal types are: $crystal_type"
+        return 1
+    fi
+
+    python3 << EOF
+import ovito
+from ovito.modifiers import *
+import numpy as np
+CrystalType = '$itype_upper'
+print(f"Analysing {CrystalType} grains in ${argfile}")
+crystal_dict = {'OTHER': '0','FCC' : '1', 'HCP' : '2', 'BCC' : '3', 'ICO' : '4', 'SC' : '5', 'CUBIC_DIAMOND' : '6', 'HEX_DIAMOND' : '7', 'GRAPHENE' : '8'}
+typeId = int(crystal_dict[CrystalType])
+print(f"Type ID: {typeId}")
+config = ovito.io.import_file("${argfile}")
+
+ptm_modifier = PolyhedralTemplateMatchingModifier()
+ptm_modifier.structures[PolyhedralTemplateMatchingModifier.Type.FCC].enabled = True
+ptm_modifier.output_orientation = True
+config.modifiers.append(ptm_modifier)
+
+cluster_modifier = GrainSegmentationModifier()
+config.modifiers.append(cluster_modifier)
+data = config.compute()
+
+grains = data.particles['Grain'].array
+structure_type = data.particles['Structure Type'].array
+CrystalType_counts = {}
+
+for grain_id, is_CrystalType in zip(grains, structure_type):
+    if grain_id not in CrystalType_counts:
+        CrystalType_counts[grain_id] = 0
+    if is_CrystalType == typeId:
+        CrystalType_counts[grain_id] += 1
+for grain_id, count in CrystalType_counts.items():
+    print(f"Grain ID: {grain_id}, {CrystalType} atoms: {count}")
+total_CrystalType_atoms = sum(CrystalType_counts.values())
+print(f"Total FCC atoms: {total_CrystalType_atoms}")
+grains = list(CrystalType_counts.keys())
+CrystalType_counts = list(CrystalType_counts.values())
+context = np.column_stack((grains,CrystalType_counts))
+np.savetxt('grain_CrystalType_count.txt',context,fmt='%d',delimiter='\t')
+EOF
+}
+
 expand_cell(){
 # 该函数可以使用ase进行扩胞
 # 输入参数为xyz文件名，以及扩胞系数，使用的方法为expand_cell model.xyz 10 10 10
