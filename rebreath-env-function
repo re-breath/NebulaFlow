@@ -24,6 +24,19 @@ export OMPI_MCA_btl_base_warn_component_unused=0
 #修改显示的样式
 #PS1='\[\033[01;36m\]\u——>NebulaFlow:\W\[\033[01;32m\]$\[\033[01;34m\] '
 
+update_NebulaFlow(){
+# 该函数使用来快速的更新NebulaFlow函数库
+    local initAddress=$(pwd)
+    echo "正在更新NebulaFlow..."
+    mkdir -p update_temp
+    cd update_temp
+    git clone https://github.com/re-breath/NebulaFlow.git > /dev/null
+    cd NebulaFlow
+    bash NebulaFlow_install.sh
+    cd $initAddress
+    rm -rf update_temp
+    echo "NebulaFlow更新完成！"
+}
 
 use_agent(){
     export http_proxy="http://192.168.1.10:3128"
