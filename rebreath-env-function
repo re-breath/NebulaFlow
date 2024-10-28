@@ -16,6 +16,7 @@ while IFS= read -r -d '' file; do
     source "$file"
 done < <(find ~/.rebreath/envsrc -type f -print0)
 
+
 #关闭vasp组件未使用警告
 export OMPI_MCA_btl_base_warn_component_unused=0
 
@@ -167,16 +168,27 @@ recc(){
 #创建一个临时的文件来保存指定文件的地址，方便后续对其进行操作
     cc_tmpfile="/tmp/cc_fzmrkwjsbzz_pointer"
     for i in "$@"; do
-        local fileaddress=${PWD}/$(basename $i)
+        local fileaddress=$(realpath "$i")
         echo "$fileaddress" >> "$cc_tmpfile"
+        echo "文件 $fileaddress 已加入记忆 ……"
     done
 }
 
+reclean(){
+#清空记忆的临时文件
+    if [ -f "$cc_tmpfile" ]; then
+        > "$cc_tmpfile"
+        echo "记忆已清空！"
+}
+
 revv(){
-#粘贴之前的所有的记录下的文件，并且将其复制到当前的文件夹中
+    # 粘贴之前的所有记录下的文件，并且将其复制到当前的文件夹中
     local vv_dir=${1:-.}
-    cat "$cc_tmpfile" | xargs -n 1  cp {} $PWD
-    > "$cc_tmpfile"
+    if [ -f "$cc_tmpfile" ]; then
+        cat "$cc_tmpfile" | xargs -I {} cp -t "$vv_dir" {}
+    else
+        echo "临时文件 $cc_tmpfile 不存在，请先运行 recc 命令。"
+    fi
 }
 
 function wslcd() {
