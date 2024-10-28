@@ -31,9 +31,9 @@ update_NebulaFlow(){
     echo "正在更新NebulaFlow..."
     mkdir -p update_temp
     cd update_temp
-    git clone https://github.com/re-breath/NebulaFlow.git > /dev/null
+    git clone https://github.com/re-breath/NebulaFlow.git 
     cd NebulaFlow
-    bash NebulaFlow_install.sh
+    bash NebulaFlowinstaller.sh
     cd $initAddress
     rm -rf update_temp
     echo "NebulaFlow更新完成！"
