@@ -179,6 +179,7 @@ reclean(){
     if [ -f "$cc_tmpfile" ]; then
         > "$cc_tmpfile"
         echo "记忆已清空！"
+    fi
 }
 
 revv(){
