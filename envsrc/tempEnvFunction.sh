@@ -13,9 +13,7 @@ cat >> caf2_tmpfile.cpp <<EOF
 #include <sstream>
 #include <vector>
 #include <chrono>
-
 using namespace std;
-
 pair<string, string> get_needReplace(const string& filename) {
     ifstream file(filename);
     string firstLine;
@@ -96,3 +94,18 @@ verify_deform(){
     gpumdstart
 }
 
+deal_box(){
+    #临时函数，用来处理box.raw文件
+    filename=${1:-"box.raw"}
+    python3 <<EOF
+import numpy as np
+import matplotlib.pyplot as plt
+
+data = np.loadtxt("$filename")
+Lx ,Ly ,Lz = data[:,0] ,data[:,4],data[:,8]
+Volume = Lx*Ly*Lz
+plt.plot(Volume)
+#print(data)
+plt.savefig("box.png")
+EOF
+}

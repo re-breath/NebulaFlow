@@ -19,3 +19,4 @@ NEDOS  =  2001         (DOSCAR points)
 NELM   =  60           (Max electronic SCF steps)
 EDIFF  =  1E-08        (SCF energy convergence, in eV)
  
+KSPACING = 0.2

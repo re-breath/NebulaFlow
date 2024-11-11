@@ -159,7 +159,7 @@
     &END QS
     &MGRID                        
       NGRIDS 4                    
-      CUTOFF 300                 
+      CUTOFF 500                 
       REL_CUTOFF 60
     &END MGRID
     &XC                       

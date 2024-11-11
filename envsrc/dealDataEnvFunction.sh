@@ -472,8 +472,6 @@ def expand_cell(filename, replicate):
     atoms = ase.io.read(filename)
     expanded_atoms = ase.build.make_supercell(atoms, replicate)
     ase.io.write('expanded.xyz', expanded_atoms)
-
-
 expand_cell(filename, replicate)
 EOF
 }
@@ -742,6 +740,7 @@ average_file_s(){
     done < "$tmp_file" >average_${avg_name}.out
     rm -f "$tmp_file"
 }
+
 average_file_c(){
 #将输入文件进行平均,使用C++实现，平均后输入到average.out文件中,后将文件改名
     local cpplib="$HOME/.rebreath/cpp_lib"
@@ -756,7 +755,7 @@ average_file_c(){
 
 
 generate_large_primes() {
-    # 辅助函数：生成大于10000的质数列表
+# 辅助函数：生成大于10000的质数列表
     local count=$1
     local primes=()
     local num=${2:-10001}
@@ -774,4 +773,223 @@ generate_large_primes() {
         num=$((num + 1))
     done
     echo "${primes[@]}"
+}
+
+update_cp2k_inp_cell_from_xyz() {
+# 辅助函数：更新CP2K输入文件中CELL_PARAMETERS部分的晶胞参数
+# 使用方式：update_cp2k_inp_cell_from_xyz model.xyz cp2k.inp
+# 达成目的：修改cp2k输入文件中的CELL部分
+
+    local xyz_file="$1"
+    local cp2k_inp="$2"
+    Lattice=$(get_Lattice $1 | grep -oP '(?<=Lattice=").*(?=")')
+    cell_A=$(echo $Lattice | awk '{print $1,$2,$3}')
+    cell_B=$(echo $Lattice | awk '{print $4,$5,$6}')
+    cell_C=$(echo $Lattice | awk '{print $7,$8,$9}')
+    sed -E "/^\s*A\s*[0-9]*\.[0-9]+ \s*[0-9]*\.[0-9]+ \s*[0-9]*\.[0-9]+/s/.*/      A   $cell_A/"  $cp2k_inp |sed -E "/^\s*B\s*[0-9]*\.[0-9]+ \s*[0-9]*\.[0-9]+ \s*[0-9]*\.[0-9]+/s/.*/      B   $cell_B/" |sed -E "/^\s*C\s*[0-9]*\.[0-9]+ \s*[0-9]*\.[0-9]+ \s*[0-9]*\.[0-9]+/s/.*/      C   $cell_C/" > ${cp2k_inp%.*}_up.inp
+
+     sed -i "/@SET XYZFILE/s/.*/@SET XYZFILE    $1/"  ${cp2k_inp%.*}_up.inp
+}
+
+calc_coordination_number() {
+# 该函数将会计算一个给定模型的配位数
+# 使用方式：calc_coordination_number model.xyz 2.5 表示将会计算model.xyz模型的配位数，配位半径为2.5中每个原子有多少个邻居,该脚本使用了ase库来读取模型文件，并且使用了最小镜像约定来计算周期性情况的配位数
+    local xyz_file="$1"
+    local r_cut=${2:-2.5}
+    python3 << EOF
+# 该脚本为使用python来计算配位数
+import numpy as np
+import ase.io as ai
+from ase.geometry import get_distances
+config = ai.read('$xyz_file')
+positions = config.positions
+cell = config.cell.diagonal()  # 获取晶胞对角线上的元素
+half_cell = cell / 2
+def mirror_pos(pos):
+    """
+    实现最小化镜像约定，原子间的距离必须要小于半晶胞的距离
+    """
+    for i in range(3):
+        if pos[i] < -half_cell[i]:
+            pos[i] = pos[i] + cell[i]
+        elif pos[i] > half_cell[i]:
+            pos[i] = pos[i] - cell[i]
+    return pos
+
+positions = config.positions
+distances = np.zeros((len(config), len(config)))
+for i in range(len(config)):
+    for j in range(i+1, len(config)):
+        mirrpos = mirror_pos(config.positions[i]-config.positions[j])
+        distances[i][j] = np.linalg.norm(mirrpos)   
+        distances[j][i] = distances[i][j]
+coordination_numbers = np.zeros(len(config))
+for i in range(len(config)):
+    coordination_numbers[i] = np.sum((distances[i] < $r_cut)&(distances[i] > 0))
+np.savetxt('coordination_numbers.txt', coordination_numbers, fmt='%d')
+print("\n配位数计算完成，结果保存在coordination_numbers.txt文件中 OVO")
+EOF
+}
+
+calc_coordination_number_cpp() {
+    # 该函数将会计算一个给定模型的配位数
+    # 使用方式：calc_coordination_number model.xyz 2.5 表示将会计算model.xyz模型的配位数，配位半径为2.5中每个原子有多少个邻居,该脚本使用了ase库来读取模型文件，并且使用了最小镜像约定来计算周期性情况的配位数
+    # 该函数可以使用了C++来实现，并且使用了最小镜像约定来计算周期性情况的配位数，并且可以计算斜胞的配位数
+    local xyz_file="$1"
+    local r_cut=${2:-2.5}
+    cat > coordination_numbers.cpp << EOF
+// 该程序使用来计算模型中每个原子的配位数
+// 该程序将会试图处理斜胞的情况
+#include <iostream>
+#include <vector>
+#include <fstream>
+#include <string>
+#include <sstream>
+#include <regex>
+#include <cmath>
+using namespace std;
+struct Atoms{
+    int atom_num;
+    double box[9];
+    double invBox[9];
+    vector<string> atomType;
+    vector<double> coordX, coordY, coordZ;
+};
+enum class LineType{
+    FirstLine,
+    SecondLine,
+    OtherLine
+};
+double getDet(double (&box)[9]){
+    //获得矩阵的模
+    return box[0] * (box[4] * box[8] - box[5] * box[7])
+         - box[1] * (box[3] * box[8] - box[5] * box[6])
+         + box[2] * (box[3] * box[7] - box[4] * box[6]);
+}
+void InverseBox(Atoms& atoms) {
+    //获得矩阵的逆矩阵
+    double (&box)[9] = atoms.box;
+    double det = getDet(atoms.box);
+    atoms.invBox[0] = (box[4] * box[8] - box[5] * box[7]) / det;
+    atoms.invBox[1] = (box[2] * box[7] - box[1] * box[8]) / det;
+    atoms.invBox[2] = (box[1] * box[5] - box[2] * box[4]) / det;
+    atoms.invBox[3] = (box[5] * box[6] - box[3] * box[8]) / det;
+    atoms.invBox[4] = (box[0] * box[8] - box[2] * box[6]) / det;
+    atoms.invBox[5] = (box[2] * box[3] - box[0] * box[5]) / det;
+    atoms.invBox[6] = (box[3] * box[7] - box[4] * box[6]) / det;
+    atoms.invBox[7] = (box[1] * box[6] - box[0] * box[7]) / det;
+    atoms.invBox[8] = (box[0] * box[4] - box[1] * box[3]) / det;
+}
+string tolow(string& str) {
+    for (auto& c : str) {
+        c = tolower(c);
+    }
+    return str;
+}
+Atoms read_xyz(string filename){
+    //该函数将会试图读取一个xyz文件，并将其中的原子坐标和盒子信息读入到Atoms结构体中
+    //使用正则表达式来处理第二行可能会更好
+    Atoms atoms;
+    ifstream infile(filename);
+    string line;
+    LineType state {LineType::FirstLine};
+    while (getline(infile, line)) {
+        if (state == LineType::FirstLine) {
+            atoms.atom_num = stoi(line);
+            state = LineType::SecondLine;
+        }
+        else if (state == LineType::SecondLine) {
+                line = tolow(line);
+                regex re(R"(\blattice=.*\"\s*([-+]?\d*\.\d+|\d+)\s+([-+]?\d*\.\d+|\d+)\s+([-+]?\d*\.\d+|\d+)\s+([-+]?\d*\.\d+|\d+)\s+([-+]?\d*\.\d+|\d+)\s+([-+]?\d*\.\d+|\d+)\s+([-+]?\d*\.\d+|\d+)\s+([-+]?\d*\.\d+|\d+)\s+([-+]?\d*\.\d+|\d+).*\")");
+                smatch match;
+                
+                if (regex_search(line, match, re) && match.size() > 1) {
+
+                    for (size_t i = 1; i < match.size(); ++i) {
+                        atoms.box[i - 1] = std::stod(match[i].str());
+                    }
+            }
+            state = LineType::OtherLine;
+        }
+        else if (state == LineType::OtherLine) {
+            istringstream iss(line);
+            double x, y, z;
+            string atom_type;
+            iss >> atom_type >> x >> y >> z;
+            atoms.atomType.push_back(atom_type);
+            atoms.coordX.push_back(x);
+            atoms.coordY.push_back(y);
+            atoms.coordZ.push_back(z);
+            //cout << atom_type << " " << x << " " << y << " " << z << endl;
+        }
+        }
+    infile.close();
+    return atoms;
+}
+
+double Mircone(double& xyz){
+    if (xyz < -0.5) {
+        return xyz + 1.0;
+    }
+    else if (xyz > 0.5) {
+        return xyz - 1.0;
+    }
+    return xyz;
+}
+
+void applyMirc(double (&box)[9],double (&InverseBox)[9], double& x, double& y, double& z){
+    // 该函数将会应用镜像约定法，让坐标满足周期性
+    // 输入的为两个原子间的距离的坐标
+    double fracX , fracY, fracZ;
+    fracX = InverseBox[0] * x + InverseBox[1] * y + InverseBox[2] * z;
+    fracY = InverseBox[3] * x + InverseBox[4] * y + InverseBox[5] * z;
+    fracZ = InverseBox[6] * x + InverseBox[7] * y + InverseBox[8] * z;
+    x = Mircone(fracX);
+    y = Mircone(fracY);
+    z = Mircone(fracZ);
+    x = box[0] * x + box[1] * y + box[2] * z;
+    y = box[3] * x + box[4] * y + box[5] * z;
+    z = box[6] * x + box[7] * y + box[8] * z;
+}
+
+int main()
+{
+    Atoms atoms = read_xyz("$xyz_file");
+
+    //转换坐标到分数坐标
+    InverseBox(atoms);
+    for (auto i:atoms.invBox){
+        cout<<i<<" ";
+    }
+    vector<int> coordination_number(atoms.atom_num, 0);
+    vector<vector<double>> distances(atoms.atom_num, vector<double>(atoms.atom_num));
+    for (int i = 0; i < atoms.atom_num; i++) {
+        for (int j = i + 1; j < atoms.atom_num; j++) {
+            double dx = atoms.coordX[i] - atoms.coordX[j];
+            double dy = atoms.coordY[i] - atoms.coordY[j];
+            double dz = atoms.coordZ[i] - atoms.coordZ[j];
+            applyMirc(atoms.box, atoms.invBox, dx, dy, dz);
+            distances[i][j] = sqrt(dx * dx + dy * dy + dz * dz);
+            distances[j][i] = distances[i][j];
+        }
+    }
+    for (int i = 0; i < atoms.atom_num; i++) {
+        for (int j = 0; j < atoms.atom_num; j++) {
+            //cout << i << " " << j << " " << distances[i][j] << endl;
+            if (distances[i][j] < $r_cut && distances[i][j] > 0) {
+                coordination_number[i]++;
+            }
+        }
+    }
+    fstream outfile("coordination_number.txt", ios::out);
+    for (int i = 0; i < atoms.atom_num; i++) {
+        outfile << atoms.atomType[i] << " " << coordination_number[i] << endl;
+    }
+    outfile.close();
+    return 0;
+}
+EOF
+    g++ -O3 -o coordination_number coordination_numbers.cpp
+    ./coordination_number
+    rm -f coordination_numbers.cpp coordination_number
 }
