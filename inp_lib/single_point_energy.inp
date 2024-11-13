@@ -1,0 +1,213 @@
+ # NVT or NPT
+@SET ENSEMBLE_EVN NONE
+@SET OT_ACTIVE    FALSE
+@SET PROJECT_NAME FeAl2O4_AIMD
+@SET XYZFILE      slab.xyz
+@SET CIFFILE      ???.cif
+@SET NAME         ${PROJECT_NAME}
+@SET RESTART      FALSE
+@SET everyTime    10
+@SET V_pressure   1.01325
+@SET V_temperature Replace
+
+&GLOBAL
+    PROJECT_NAME  ${PROJECT_NAME}
+    RUN_TYPE    ENERGY
+    PRINT_LEVEL LOW
+&END GLOBAL
+
+&MOTION
+    @IF (${ENSEMBLE_EVN} == NPT)
+    &MD
+        ENSEMBLE NPT_I
+        STEPS 1000
+        TEMPERATURE ${V_temperature}
+        TIMESTEP 1.0
+        &BAROSTAT
+            PRESSURE ${V_pressure}
+            TIMECON 100
+        &END BAROSTAT
+        &PRINT
+            FORCE_LAST .TRUE.
+            &ENERGY
+                &EACH
+                    MD ${everyTime}
+                &END EACH
+            &END ENERGY
+            &PROGRAM_RUN_INFO
+                &EACH
+                   MD 10
+                &END EACH
+            &END PROGRAM_RUN_INFO
+        &END PRINT
+        &THERMOSTAT
+            TYPE NOSE
+                &NOSE
+                TIMECON 100.
+            &END NOSE
+        &END THERMOSTAT
+    &END MD
+   &GEO_OPT
+     MAX_ITER 400
+     OPTIMIZER LBFGS
+     MAX_FORCE 6.0E-4
+    &LBFGS
+      MAX_H_RANK 30
+    &END LBFGS
+   &END GEO_OPT
+   @ENDIF
+   @IF (${ENSEMBLE_EVN} == NVT)
+   &MD
+        ENSEMBLE NVT
+        STEPS 1000
+        TEMPERATURE ${V_temperature}
+        TIMESTEP 0.5
+        &PRINT
+            FORCE_LAST .TRUE.
+            &ENERGY
+                &EACH
+                    MD ${everyTime}
+                &END EACH
+            &END ENERGY
+            &PROGRAM_RUN_INFO
+                &EACH
+                    MD 10
+                &END EACH
+            &END PROGRAM_RUN_INFO
+        &END PRINT
+        &THERMOSTAT
+            TYPE NOSE
+        &END THERMOSTAT
+    &END MD
+  @ENDIF
+    &PRINT
+        &CELL
+            &EACH
+                MD ${everyTime}
+            &END EACH
+        &END CELL
+        &FORCES
+            &EACH
+                MD ${everyTime}
+            &END EACH
+        &END FORCES
+        &RESTART
+            &EACH
+                MD 20
+            &END EACH
+        &END RESTART
+        &RESTART_HISTORY
+            &EACH
+                MD 5000
+            &END EACH
+        &END RESTART_HISTORY
+        &VELOCITIES
+            &EACH
+                MD ${everyTime}
+            &END EACH
+        &END VELOCITIES
+        &TRAJECTORY  SILENT
+            FORMAT DCD_ALIGNED_CELL
+            &EACH
+                MD ${everyTime}
+            &END EACH
+        &END TRAJECTORY
+        &STRESS
+            &EACH
+                MD ${everyTime}
+            &END EACH
+        &END STRESS
+    &END PRINT
+&END MOTION
+
+&FORCE_EVAL
+  METHOD Quickstep
+  @IF (${ENSEMBLE_EVN} == NPT)
+  STRESS_TENSOR ANALYTICAL
+  @ENDIF
+  &SUBSYS
+    &KIND Fe
+      ELEMENT   Fe
+      BASIS_SET DZVP-MOLOPT-SR-GTH
+      POTENTIAL GTH-PADE-q16
+    &END KIND
+    &KIND O
+        ELEMENT O
+        BASIS_SET DZVP-MOLOPT-SR-GTH
+        POTENTIAL GTH-PADE-q6
+    &END KIND
+    &KIND Al
+        ELEMENT   Al
+        BASIS_SET DZVP-MOLOPT-SR-GTH
+        POTENTIAL GTH-PADE-q3
+    &END KIND
+     &CELL
+       A 26.430949139219347 0.0 0.0
+       B 7.929284741765804 8.76615411477576 0.0
+       C 0.0 0.0 36.95419420582951
+       MULTIPLE_UNIT_CELL  1 1 1
+     &END CELL
+     &TOPOLOGY
+       COORD_FILE_NAME ${XYZFILE}
+       COORD_FILE_FORMAT  XYZ
+     &END TOPOLOGY
+  &END SUBSYS
+  &DFT
+    BASIS_SET_FILE_NAME  BASIS_MOLOPT
+    POTENTIAL_FILE_NAME  GTH_POTENTIALS
+    &QS
+      EPS_DEFAULT 1.0E-10
+    &END QS
+    &MGRID
+      NGRIDS 4
+      CUTOFF 400
+      REL_CUTOFF 60
+    &END MGRID
+    &XC
+      &XC_FUNCTIONAL PADE
+      &END XC_FUNCTIONAL
+      &vdW_POTENTIAL
+         DISPERSION_FUNCTIONAL PAIR_POTENTIAL
+         &PAIR_POTENTIAL
+           TYPE DFTD3
+           PARAMETER_FILE_NAME  dftd3.dat
+           REFERENCE_FUNCTIONAL BLYP
+         &END PAIR_POTENTIAL
+      &END vdW_POTENTIAL
+    &END XC
+    &SCF
+        SCF_GUESS ATOMIC
+        EPS_SCF 1.0E-4
+        MAX_SCF 30
+        &OUTER_SCF ON
+          EPS_SCF 1.0E-6
+          MAX_SCF 5
+        &END
+        @IF (${OT_ACTIVE} == FALSE)
+        &DIAGONALIZATION  ON
+            ALGORITHM STANDARD
+        &END DIAGONALIZATION
+        &MIXING  T
+         METHOD BROYDEN_MIXING
+         ALPHA 0.4
+         NBROYDEN 8
+        &END MIXING
+        @ENDIF
+        @IF (${OT_ACTIVE} == TRUE)
+        &OT ON
+          MINIMIZER DIIS
+          PRECONDITIONER FULL_ALL
+          ALGORITHM IRAC
+        &END OT
+        @ENDIF
+        &PRINT
+            &RESTART OFF
+            &END
+        &END PRINT
+    &END SCF
+  &END DFT
+  &PRINT
+    &FORCES ON
+    &END FORCES
+  &END PRINT
+&END FORCE_EVAL
