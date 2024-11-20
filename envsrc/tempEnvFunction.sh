@@ -109,3 +109,71 @@ plt.plot(Volume)
 plt.savefig("box.png")
 EOF
 }
+
+
+gpumdstart_dcu(){
+#本程序建立是为了简化在曙光上使用gpumd的流程，该程序默认任务名为执行命令的文件夹的名字，默认使用1dcu与1cpu,也可以使用-n参数指定使用dcu的数量
+dcu_num=1
+for arg in "$@"; do 
+   if [[ $arg = "-n" ]]; then
+     dcu_num=${2:-1}
+     break
+   fi
+done
+gpumd_version=${gpumd_version:"GPUMD"}
+job_name=$(basename "$PWD")
+
+echo "#!/bin/bash
+#SBATCH -p xahdnormal
+#SBATCH -N  1
+#SBATCH --ntasks-per-node=$dcu_num
+#SBATCH --gres=dcu:$dcu_num
+#SBATCH --time 144:00:00
+#SBATCH --comment=GPUMD
+#SBATCH -o $PWD/std.out.%j
+#SBATCH -e $PWD/std.err.%j
+
+# MARK_CMD
+source /work/home/rebreath/sbatch_need/gpumd_env.sh
+/work/share/acmtrwrxv5/${gpumd_version}/src/gpumd" | sbatch -J "$job_name"
+
+}
+
+update_cp2k_inp_cell_from_xyz() {
+    # 辅助函数：更新CP2K输入文件中CELL_PARAMETERS部分的晶胞参数
+    # 使用方式：update_cp2k_inp_cell_from_xyz model.xyz cp2k.inp
+    # 达成目的：修改cp2k输入文件中的CELL部分
+
+    local xyz_file="$1"
+    local cp2k_inp="$2"
+    Lattice=$(get_Lattice $1 | grep -oP '(?<=Lattice=").*(?=")')
+    cell_A=$(echo $Lattice | awk '{print $1,$2,$3}')
+    cell_B=$(echo $Lattice | awk '{print $4,$5,$6}')
+    cell_C=$(echo $Lattice | awk '{print $7,$8,$9}')
+    sed -E "/^\s*A\s*[0-9]*\.[0-9]+ \s*[0-9]*\.[0-9]+ \s*[0-9]*\.[0-9]+/s/.*/      A   $cell_A/"       $cp2k_inp |sed -E "/^\s*B\s*[0-9]*\.[0-9]+ \s*[0-9]*\.[0-9]+ \s*[0-9]*\.[0-9]+/s/.*/      B   $cell_B/ " |sed -E "/^\s*C\s*[0-9]*\.[0-9]+ \s*[0-9]*\.[0-9]+ \s*[0-9]*\.[0-9]+/s/.*/      C   $cell_C/" >      ${cp2k_inp%.*}_up.inp
+
+    sed -i "/@SET XYZFILE/s/.*/@SET XYZFILE    $1/"  ${cp2k_inp%.*}_up.inp
+}
+
+
+cp2kstart() {
+# 临时函数，用来在曙光上启动 CP2K
+# 使用方式：cp2kstart cp2k.inp 32
+    local inpfile=${1:-"cp2k.inp"}
+    local cpu_num=${2:-32}
+    local job_name=$(basename "$PWD")
+    cat > temp.slurm <<EOF
+#!/bin/bash
+#SBATCH -J $job_name
+#SBATCH -N 1
+#SBATCH --ntasks-per-node=$cpu_num
+#SBATCH -p xahcnormal
+
+module purge
+module load cp2k/2023.1-intelmpi-2018
+
+srun --mpi=pmi2 cp2k.popt -i $inpfile -o cp2k.log
+EOF
+     sbatch  temp.slurm
+}
+

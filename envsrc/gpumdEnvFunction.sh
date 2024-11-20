@@ -258,35 +258,6 @@ compute_elastic_moduli(){
 }
 
 
-gpumdstart_dcu(){
-#本程序建立是为了简化在曙光上使用gpumd的流程，该程序默认任务名为执行命令的文件夹的名字，默认使用1dcu与1cpu,也可以使用-n参数指定使用dcu的数量
-dcu_num=1
-for arg in "$@"; do 
-   if [[ $arg = "-n" ]]; then
-     dcu_num=${2:-1}
-     break
-   fi
-done
-gpumd_version=${gpumd_version:"GPUMD"}
-job_name=$(basename "$PWD")
-
-echo "#!/bin/bash
-#SBATCH -p xahdnormal
-#SBATCH -N  1
-#SBATCH --ntasks-per-node=$dcu_num
-#SBATCH --gres=dcu:$dcu_num
-#SBATCH --time 144:00:00
-#SBATCH --comment=GPUMD
-#SBATCH -o $PWD/std.out.%j
-#SBATCH -e $PWD/std.err.%j
-
-# MARK_CMD
-source /work/home/rebreath/sbatch_need/gpumd_env.sh
-/work/share/acmtrwrxv5/${gpumd_version}/src/gpumd" | sbatch -J "$job_name"
-EOF
-}
-
-
 
 start_gpumd(){
 #该函数用来启动gpumd的计算，对于dcu可以进行制定核数的计算,可以使用来代替gpumd的启动
