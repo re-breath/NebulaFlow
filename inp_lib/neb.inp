@@ -1,0 +1,66 @@
+&GLOBAL
+  PRINT_LEVEL LOW
+  PROJECT ch3cl
+  RUN_TYPE BAND                      # Nudged elastic band calculation
+&END GLOBAL
+
+&MOTION
+  &BAND
+    NUMBER_OF_REPLICA 10             # Number of "replica" geometries along the path
+    K_SPRING 0.05
+    &OPTIMIZE_BAND
+      OPT_TYPE DIIS
+      &DIIS
+        MAX_STEPS 1000
+      &END
+    &END
+    BAND_TYPE CI-NEB                 # Climbing-image NEB
+    &CI_NEB
+      NSTEPS_IT  5                   # First take 5 normal steps, then start CI
+    &END
+    &REPLICA
+      COORD_FILE_NAME init.xyz
+    &END
+    &REPLICA
+      COORD_FILE_NAME final.xyz
+    &END
+    &PROGRAM_RUN_INFO
+     INITIAL_CONFIGURATION_INFO
+    &END
+  &END BAND
+&END MOTION
+
+&FORCE_EVAL
+  METHOD Quickstep
+  &DFT
+    CHARGE -1                      # There is a negatively charged anion
+    &QS
+      METHOD PM6                  # Parametrization Method 6
+      &SE
+      &END SE
+    &END QS
+    &SCF                          # Convergence parameters for force evaluation
+      SCF_GUESS ATOMIC
+      EPS_SCF 1.0E-5
+      MAX_SCF 50
+       &OUTER_SCF
+          EPS_SCF 1.0E-7
+          MAX_SCF 500
+       &END
+    &END SCF
+    &POISSON                      # POISSON solver for non-periodic calculation
+      PERIODIC NONE
+      PSOLVER WAVELET
+    &END
+  &END DFT
+  &SUBSYS
+    &CELL
+      ABC 10.0 10.0 10.0
+      PERIODIC NONE
+    &END CELL
+    &TOPOLOGY
+      COORD_FILE_NAME init.xyz
+      COORDINATE xyz
+    &END TOPOLOGY
+  &END SUBSYS
+&END FORCE_EVAL
