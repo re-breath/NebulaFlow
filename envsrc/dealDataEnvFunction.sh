@@ -137,7 +137,7 @@ def export_plot_data(listx,listy,filename:str):
     listy = [int(y) for y in listy]
     date = np.column_stack((listx,listy))
     #print(date)
-    np.savetxt(filename,date,delimiter=' ')
+    np.savetxt(filename,date,delimiter=' ',fmt='%d')
     print('数据已保存至',filename)
 
 def plot_grain_zone(filename):
@@ -843,7 +843,7 @@ calc_coordination_number_cpp() {
 #include <iostream>
 #include <vector>
 #include <fstream>
-#include <string>
+#include <string>s
 #include <sstream>
 #include <regex>
 #include <cmath>

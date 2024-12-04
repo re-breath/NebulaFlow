@@ -9,10 +9,11 @@
 @SET everyTime    10
 @SET V_pressure   1.01325
 @SET V_temperature Replace
+@SET RUN_TYPE     GEO_OPT
 
 &GLOBAL
     PROJECT_NAME  ${PROJECT_NAME}
-    RUN_TYPE    GEO_OPT
+    RUN_TYPE      ${RUN_TYPE}
     PRINT_LEVEL LOW
 &END GLOBAL
 
@@ -47,14 +48,16 @@
             &END NOSE
         &END THERMOSTAT
     &END MD
-   &GEO_OPT
-     MAX_ITER 400
-     OPTIMIZER LBFGS
-     MAX_FORCE 6.0E-4
-    &LBFGS
-      MAX_H_RANK 30
-    &END LBFGS
-   &END GEO_OPT
+   @ENDIF
+   @IF (${RUN_TYPE} == GEO_OPT)
+    &GEO_OPT
+        MAX_ITER 100
+        OPTIMIZER LBFGS
+        MAX_FORCE 6.0E-4
+        &LBFGS
+        MAX_H_RANK 30
+        &END LBFGS
+    &END GEO_OPT
    @ENDIF
    @IF (${ENSEMBLE_EVN} == NVT)
    &MD

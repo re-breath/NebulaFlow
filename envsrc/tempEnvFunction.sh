@@ -177,3 +177,12 @@ EOF
      sbatch  temp.slurm
 }
 
+find_dcu_speed() {
+    find $PWD -type f -name "std.out*" -exec sh -c '
+        for file; do
+            grep -A 10 "GPU information" "$file"
+            grep "Speed of this run =" "$file" | awk -F "=" "{print \$2}"
+        done
+    ' sh {} + > dcu.txt
+}
+

@@ -3,6 +3,7 @@ import numpy as np
 import sys
 import os
 import matplotlib.pyplot as plt
+import ase.io as ai
 
 def elect_rely_force(config,minforce,maxforce):
     """检查二维矩阵中每一个值是否在一定范围内"""
@@ -12,6 +13,7 @@ def filter_force(configs,minforce,maxforce):
     """筛选出符合要求的构型"""
     fit_file = "force_fited.xyz"
     unfit_file = "force_unfited.xyz"
+    
     if os.path.exists(fit_file):
         os.remove(fit_file)
     if os.path.exists(unfit_file):
@@ -32,6 +34,8 @@ def filter_force(configs,minforce,maxforce):
    
     force_fit = np.concatenate([config.force.flatten() for config in fitconfigs])
     plt.hist(force_fit,bins=100,color=my_favorite_colors[2],alpha=0.8,label='Fit-Force')
+    # for i in fitindex:
+    #     ai.write(fit_file,atoms[i],append=True)
     nebula.write_xyz(fit_file,fitconfigs)
     nebula.write_xyz(unfit_file,unfitconfigs)
     
@@ -50,6 +54,7 @@ if len(sys.argv) != 4:
 my_favorite_colors = ['#1f77b4', '#a56cc1', '#39bdc8', '#d62728', '#9467bd', '#f5587b', '#fcb1b1', '#cabbe9', '#30e3ca', '#00d1ff']
 
 configs = nebula.read_xyz(readfile)
+# atoms = ai.read(readfile)
 print(f"Number of configs:",len(configs))
 # print(len(configs),type(configs),configs)
 
