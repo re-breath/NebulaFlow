@@ -335,14 +335,18 @@ mycat(){
 }
 
 dirman(){
-    # 目录管理器
+# 查看目录下的手册
+# 使用方法：dirman /path/to/directory
     local path=$(realpath "$1")
-    echo "当前目录：$path"
-    cat path/.dirlog
+    echo ""
+    echo "——>指定目录：$path"
+    cat $path/.dirlog
+    echo 'Task completed. See you later! O.<'
+    echo ""
 }
 
-write_dirlog(){
-    # 记录目录的操作记录
+wdlog(){
+# 记录目录的操作记录
     local path=$(realpath "$1")
     vim "$path/.dirlog"
 }
