@@ -334,4 +334,15 @@ mycat(){
      done
 }
 
+dirman(){
+    # 目录管理器
+    local path=$(realpath "$1")
+    echo "当前目录：$path"
+    cat path/.dirlog
+}
 
+write_dirlog(){
+    # 记录目录的操作记录
+    local path=$(realpath "$1")
+    vim "$path/.dirlog"
+}

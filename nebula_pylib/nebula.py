@@ -128,6 +128,21 @@ def write_xyz_config(filename:str,config):
             with open(filename, 'w') as w:
                 w.writelines(lines[config.index1:config.index2])
 
+def read_thermo(filename):
+    """
+    读取gpumd的输出文件thermo.out
+    """
+    data = np.loadtxt(filename)
+    thermo = dict()
+    if data.shape[1] == 12:
+        labels = ['T','K','U','Px','Py','Pz','Pyz','Pxz','Pxy','Lx','Ly','Lz']
+        for i in range(12):
+            thermo[labels[i]] = data[:,i]
+    if data.shape[1] == 18:
+        labels = ['T','K','U','Px','Py','Pz','Pyz','Pxz','Pxy','ax','ay','az','bx','by','bz','cx','cy','cz']
+        for i in range(18):
+            thermo[labels[i]] = data[:,i]
+    return thermo
 
 
 if __name__ == '__main__':

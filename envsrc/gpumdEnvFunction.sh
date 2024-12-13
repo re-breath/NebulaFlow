@@ -305,13 +305,34 @@ get_V(){
         python3 << EOF
 import numpy as np
 filename='$xyz_file'
-data = np.loadtxt(filename)
-def get_volume(data):
-    lx = data[:,-3]
-    ly = data[:,-2]
-    lz = data[:,-1]
-    return lx*ly*lz
-V = get_volume(data)
+
+def read_thermo(filename):
+    """
+    读取gpumd的输出文件thermo.out
+    """
+    data = np.loadtxt(filename)
+    thermo = dict()
+    if data.shape[1] == 12:
+        labels = ['T','K','U','Px','Py','Pz','Pyz','Pxz','Pxy','Lx','Ly','Lz']
+        for i in range(12):
+            thermo[labels[i]] = data[:,i]
+    if data.shape[1] == 18:
+        labels = ['T','K','U','Px','Py','Pz','Pyz','Pxz','Pxy','ax','ay','az','bx','by','bz','cx','cy','cz']
+        for i in range(18):
+            thermo[labels[i]] = data[:,i]
+    return thermo
+
+def get_volume(filename):
+    thermo = read_thermo(filename)
+    line_num = len(thermo['ax'])
+    V = np.zeros(line_num)
+    for i in range(line_num):
+        a1 = [thermo['ax'][i],thermo['ay'][i],thermo['az'][i]]
+        a2 = [thermo['bx'][i],thermo['by'][i],thermo['bz'][i]]
+        a3 = [thermo['cx'][i],thermo['cy'][i],thermo['cz'][i]]
+        V[i] = np.dot(np.cross(a1,a2),a3)
+    return V
+V = get_volume(filename)
 for i in V:
     print(i)
 EOF

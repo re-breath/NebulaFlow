@@ -993,3 +993,27 @@ EOF
     ./coordination_number
     rm -f coordination_numbers.cpp coordination_number
 }
+
+
+analysis_model(){
+# 该函数使用来分析一个原子model文件输出其原子的个数，与每种原子的种类
+    local xyz_file="$1"
+    python3 << EOF
+from ase.io import read
+from collections import Counter
+def analyze_xyz_file(filename):
+    atoms = read(filename)
+    symbols = atoms.get_chemical_symbols()
+    total_atoms = len(symbols)
+    element_counts = Counter(symbols)
+    unique_elements = list(element_counts.keys())
+    print(f"Total number of atoms: {total_atoms}")
+    print(f"Number of unique elements: {len(unique_elements)}")
+    print("Element counts:")
+    for element, count in element_counts.items():
+        print(f"{element}: {count}")
+    return total_atoms, unique_elements, element_counts
+filename = '$xyz_file'  
+analyze_xyz_file(filename)
+EOF
+}
