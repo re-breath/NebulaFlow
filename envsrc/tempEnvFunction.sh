@@ -186,3 +186,29 @@ find_dcu_speed() {
     ' sh {} + > dcu.txt
 }
 
+build_stages(){
+# 用于臭氧的项目
+# 该函数使用来构建多个stage文件夹，并且将输入文件放进去
+    local init=$PWD
+    for i in {1..4};do
+        mkdir -p stage$i
+        cp  *.inp *stage${i}.xyz stage$i
+        cd stage$i
+        echo "----->stage${i} : $PWD" 
+        update_cp2k_inp_cell_from_xyz *stage${i}.xyz *.inp
+        cp2kstart Temp_up_up.inp
+        cd $init
+    done
+}
+
+check_stage_energy(){
+# 该函数是用来检查各个阶段的能量
+    echo "stage1: "
+    grep "ENERGY|" stage1/cp2k.log | head -n 3
+    echo "stage2: "
+    grep "ENERGY|" stage2/cp2k.log | head -n 3
+    echo "stage3: "
+    grep "ENERGY|" stage3/cp2k.log | head -n 3
+    echo "stage4: "
+    grep "ENERGY|" stage4/cp2k.log | head -n 3
+}

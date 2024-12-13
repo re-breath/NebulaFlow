@@ -2,11 +2,12 @@
 
 cp2krestart2cif() {
 # 使用了Multiwfn软件，将cp2k的restart文件转换为cif文件
-    Multiwfn *.restart << EOF 
+    local cifilename=${1:-"opt.cif"}
+    Multiwfn *.restart << EOF > /dev/null
     100
     2
     33
-    opt.cif
+    $cifilename
     0
     q
 EOF
@@ -14,11 +15,12 @@ EOF
 
 cp2krestart2xyz() {
 # 使用了Multiwfn软件，将cp2k的restart文件转换为xyz文件
-    Multiwfn *.restart << EOF 
+    local xyzfilename=${1:-"opt.xyz"}
+    Multiwfn *.restart << EOF  > /dev/null
     100
     2
-    33
-    opt.xzy
+    2
+    $xyzfilename
     0
     q
 EOF
@@ -61,4 +63,12 @@ module load cp2k/2023.1-intelmpi-2018
 srun --mpi=pmi2 cp2k.popt -i $inpfile -o cp2k.log
 EOF
      sbatch  temp.slurm
+}
+
+get_cp2k_energy() {
+# 该函数从CP2K的log文件中提取能量
+# 使用方式：get_cp2k_energy cp2k.log
+# 达成目的：提取CP2K的能量
+    local logfile=${1:-"cp2k.log"}
+    grep "ENERGY|" $logfile |tail -n 5
 }
