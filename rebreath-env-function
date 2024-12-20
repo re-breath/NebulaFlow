@@ -330,7 +330,6 @@ mycat(){
          random_number=$(shuf -i 1-4 -n 1)
          processed_line=$(printf "%0.s喵" $(seq 1 $random_number))
          echo -e "\e[32m${random_emoji}：\e[0m $processed_line\n"
-
      done
 }
 
@@ -347,6 +346,14 @@ dirman(){
 
 wdlog(){
 # 记录目录的操作记录
-    local path=$(realpath "$1")
+    local init=$PWD
+    local path=${1:-init}
+
     vim "$path/.dirlog"
+}
+
+addpath(){
+# 添加环境变量
+    local path=$(realpath "$1")
+    echo "export PATH=$path"':$PATH' >> ~/.bashrc
 }

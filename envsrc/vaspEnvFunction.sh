@@ -1,3 +1,46 @@
+# 该函数用来存放VASP环境变量设置和函数
+
+vasprun(){
+# 该函数用来提交VASP任务到SLURM队列中
+# 调用方式：vasprun [corenum]
+
+    local taskname=$(basename $PWD)
+    local corenum=${1:-64}
+
+    for file in INCAR POSCAR POTCAR; do
+        if [ ! -f "$file" ]; then
+            echo "Error: Required VASP input file '$file' does not exist."
+            return 1
+        fi
+    done
+
+    local slurm_script="vasp.slurm"
+    cat > "$slurm_script" <<EOF
+#!/bin/bash
+#SBATCH -J $taskname
+#SBATCH -N 1
+#SBATCH --ntasks-per-node=$corenum
+#SBATCH -p xahcnormal
+module purge
+source /work/home/rebreath/apprepo/vasp/6.4.3-ioptcell_intelmpi2017_hdf5_libxc/scripts/env.sh
+export MKL_DEBUG_CPU_TYPE=5 # 加速代码
+export MKL_CBWR=AVX2 # 使cpu默认支持avx2
+export I_MPI_PIN_DOMAIN=numa # 内存位置与cpu位置绑定，加速内存读取。对于内存带宽要求高的计算提速明显
+echo "Starting VASP job at $(date)"
+srun --mpi=pmi2 vasp_std
+echo "VASP job completed at $(date)"
+EOF
+    echo "Submitting VASP job $taskname with $corenum cores..."
+    sbatch "$slurm_script"
+    local sbatch_status=$?
+    if [ $sbatch_status -eq 0 ]; then
+        echo "VASP job $taskname submitted successfully."
+        # rm "$slurm_script"
+    else
+        echo "Error: Failed to submit VASP job '$taskname'."
+        return 1
+    fi
+}
 
 generate_band_plot() {
     #函数说明：该函数用来指定DFPT的band.yaml文件拿来画图
