@@ -212,3 +212,67 @@ check_stage_energy(){
     echo "stage4: "
     grep "ENERGY|" stage4/cp2k.log | head -n 3
 }
+
+build_adsorption_model(){
+# 该函数可以指定基底模型与需要吸附的模型，而后生成各种吸附位点的吸附模型
+# 使用方法： build_adsorption_model alphaFe2O3_012.xyz O3 表示将会构建一个alphaFe2O3的基底模型，并吸附O3
+    local base_model=$1
+    local adsorbate=${2:-O3}
+
+    python3 <<EOF
+import ase.io as ai
+from pymatgen.analysis.adsorption import AdsorbateSiteFinder,plot_slab
+from pymatgen.core.structure import Structure
+import matplotlib.pyplot as plt
+import ase.build as ab
+import ase.visualize as av
+import numpy as np
+from pymatgen.io.ase import AseAtomsAdaptor
+import os
+
+ozone_ab = ab.molecule("$adsorbate")
+
+#av.view(ozone)
+def calc_key_lengthandangle(atoms)->tuple:
+    """
+    该函数使用来计算ozone的键长和键角
+    """
+    # 计算键长
+    key_length = atoms.get_distance(0, 1)
+    # 计算键角
+    key_angle = atoms.get_angle(0, 1, 2)
+    return key_length, key_angle
+
+def find_adsorption_sites(filename)->list:
+    """
+    该函数使用来查找吸附点
+    """
+    atoms = ai.read(filename)
+    ai.write("temp.cif", atoms)
+    struct = Structure.from_file('temp.cif')
+
+    asf = AdsorbateSiteFinder(struct)
+    ozone = AseAtomsAdaptor.get_molecule(ozone_ab)
+    # 可视化活性位点
+    # fig = plt.figure()
+    # plot_slab(FeAl2O4_110, adsorption_sites=True,ax=fig.add_subplot(111))
+    # plt.show()
+    adsorption_sites = asf.find_adsorption_sites()
+    print(f"\nFile: {filename}\nAdsorption sites found:\n {adsorption_sites}")
+    #print(adsorption_sites['all'][0])
+    for idx,site in enumerate(adsorption_sites['all']):
+        print(f"Adsorption site {idx+1}: {site}")
+        absorbed_structure = asf.add_adsorbate(molecule=ozone, ads_coord=site)
+        atoms_temp = AseAtomsAdaptor.get_atoms(absorbed_structure)
+        output_filename = f"adsorbed_structure_{idx}.xyz"
+        #absorbed_structure.to(filename=output_filename)
+        ai.write(output_filename, atoms_temp)
+        print(f"Saved adsorbed structure to {output_filename}")
+
+    os.remove("temp.cif")
+
+    return adsorption_sites
+
+adsorption_sites = find_adsorption_sites('$base_model')
+EOF
+}
