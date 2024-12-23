@@ -213,66 +213,71 @@ check_stage_energy(){
     grep "ENERGY|" stage4/cp2k.log | head -n 3
 }
 
-build_adsorption_model(){
-# 该函数可以指定基底模型与需要吸附的模型，而后生成各种吸附位点的吸附模型
-# 使用方法： build_adsorption_model alphaFe2O3_012.xyz O3 表示将会构建一个alphaFe2O3的基底模型，并吸附O3
-    local base_model=$1
-    local adsorbate=${2:-O3}
 
-    python3 <<EOF
-import ase.io as ai
-from pymatgen.analysis.adsorption import AdsorbateSiteFinder,plot_slab
-from pymatgen.core.structure import Structure
-import matplotlib.pyplot as plt
-import ase.build as ab
-import ase.visualize as av
-import numpy as np
-from pymatgen.io.ase import AseAtomsAdaptor
-import os
 
-ozone_ab = ab.molecule("$adsorbate")
-
-#av.view(ozone)
-def calc_key_lengthandangle(atoms)->tuple:
-    """
-    该函数使用来计算ozone的键长和键角
-    """
-    # 计算键长
-    key_length = atoms.get_distance(0, 1)
-    # 计算键角
-    key_angle = atoms.get_angle(0, 1, 2)
-    return key_length, key_angle
-
-def find_adsorption_sites(filename)->list:
-    """
-    该函数使用来查找吸附点
-    """
-    atoms = ai.read(filename)
-    ai.write("temp.cif", atoms)
-    struct = Structure.from_file('temp.cif')
-
-    asf = AdsorbateSiteFinder(struct)
-    ozone = AseAtomsAdaptor.get_molecule(ozone_ab)
-    # 可视化活性位点
-    # fig = plt.figure()
-    # plot_slab(FeAl2O4_110, adsorption_sites=True,ax=fig.add_subplot(111))
-    # plt.show()
-    adsorption_sites = asf.find_adsorption_sites()
-    print(f"\nFile: {filename}\nAdsorption sites found:\n {adsorption_sites}")
-    #print(adsorption_sites['all'][0])
-    for idx,site in enumerate(adsorption_sites['all']):
-        print(f"Adsorption site {idx+1}: {site}")
-        absorbed_structure = asf.add_adsorbate(molecule=ozone, ads_coord=site)
-        atoms_temp = AseAtomsAdaptor.get_atoms(absorbed_structure)
-        output_filename = f"adsorbed_structure_{idx}.xyz"
-        #absorbed_structure.to(filename=output_filename)
-        ai.write(output_filename, atoms_temp)
-        print(f"Saved adsorbed structure to {output_filename}")
-
-    os.remove("temp.cif")
-
-    return adsorption_sites
-
-adsorption_sites = find_adsorption_sites('$base_model')
+vaspstart_geo_opt(){
+# 该函数为临时函数，使用来快速的构建vasp的结构优化的任务
+    add_potcar
+    cat > INCAR <<EOF
+ ISTART =  0            (Read existing wavefunction, if there)
+ ISPIN  =  1            (Non-Spin polarised DFT)
+ LREAL  = Auto       (Projection operators: automatic)
+ ENCUT  =  400        (Cut-off energy for plane wave basis set, in eV)
+ PREC   =  Accurate   (Precision level: Normal or Accurate, set Accurate when perform structure lattice relaxation calculation)
+ LWAVE  = .FALSE.        (Write WAVECAR or not)
+ LCHARG = .FALSE.        (Write CHGCAR or not)
+ ADDGRID= .TRUE.        (Increase grid, helps GGA convergence)
+ ISIF  =  2
+ ALGO  =  Fast
+ IBRION = 2
+ EDIFFG = -0.02
+ 
+ Static Calculation
+ ISMEAR =  0            (gaussian smearing method)
+ SIGMA  =  0.05         (please check the width of the smearing)
+ LORBIT =  11           (PAW radii for projected DOS)
+ NEDOS  =  2001         (DOSCAR points)
+ #NELM   =  260           (Max electronic SCF steps)
+ NSW    =   160
+ EDIFF  =  1E-04        (SCF energy convergence, in eV)
+ IVDW = 12
+ KSPACING = 0.2
 EOF
+    vasprun_dcu 4
+
 }
+
+vaspstart_single_energy(){
+    # 该函数为临时函数，使用来快速的构建vasp的单点能量计算的任务
+    mkdir -p calc_SE
+    cd calc_SE
+    cp ../CONTCAR POSCAR
+    add_potcar
+    cat > INCAR <<EOF
+ISTART =  0            
+ISPIN  =  1           
+LREAL  = Auto      
+ENCUT  =  500     
+PREC   =  Accurate   
+LWAVE  = .FALSE.      
+LCHARG = .FALSE.      
+ADDGRID= .TRUE.      
+ISIF  =  2
+ALGO  =  Fast
+IBRION = 0
+
+Static Calculation
+ISMEAR =  0            
+SIGMA  =  0.05         
+LORBIT =  11           
+NEDOS  =  2001        
+NELM   =  260         
+EDIFF  =  1E-05        
+ 
+KSPACING = 0.2 
+EOF
+    echo "task adress : $PWD"
+    vasprun
+    echo "Single-point energy calculation"
+}
+

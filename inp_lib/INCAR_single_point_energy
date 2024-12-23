@@ -16,7 +16,8 @@ ISMEAR =  0            (gaussian smearing method)
 SIGMA  =  0.05         (please check the width of the smearing)
 LORBIT =  11           (PAW radii for projected DOS)
 NEDOS  =  2001         (DOSCAR points)
-NELM   =  60           (Max electronic SCF steps)
+NELM   =  160           (Max electronic SCF steps)
 EDIFF  =  1E-08        (SCF energy convergence, in eV)
- 
+
+IVDW = 12
 KSPACING = 0.2
