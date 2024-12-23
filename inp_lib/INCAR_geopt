@@ -1,0 +1,25 @@
+ ISTART =  0            (Read existing wavefunction, if there)
+ ISPIN  =  1            (Non-Spin polarised DFT)
+ LREAL  = Auto       (Projection operators: automatic)
+ ENCUT  =  400        (Cut-off energy for plane wave basis set, in eV)
+ PREC   =  Accurate   (Precision level: Normal or Accurate, set Accurate when perform structure lattice relaxation calculation)
+ LWAVE  = .FALSE.        (Write WAVECAR or not)
+ LCHARG = .FALSE.        (Write CHGCAR or not)
+ ADDGRID= .TRUE.        (Increase grid, helps GGA convergence)
+ ISIF  =  2
+ ALGO  =  Normal
+ IBRION = 2
+ #EDIFFG = -0.02
+ 
+ Static Calculation
+ ISMEAR =  0            (gaussian smearing method)
+ SIGMA  =  0.05         (please check the width of the smearing)
+ LORBIT =  11           (PAW radii for projected DOS)
+ NEDOS  =  2001         (DOSCAR points)
+ #NELM   =  260           (Max electronic SCF steps)
+ NSW    =   30
+ EDIFF  =  1E-02        (SCF energy convergence, in eV)
+ IVDW = 12
+ 
+ KSPACING = 0.3
+ 

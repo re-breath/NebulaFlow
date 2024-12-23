@@ -1,0 +1,38 @@
+SYSTEM = FeO
+ENCUT = 500
+ISTART = 1
+ICHARG = 0
+ISMEAR = 0
+SIGMA = 0.2
+NSW = 100          # Number of ionic steps
+NELM = 100
+IBRION = 2         # Algorithm: CG
+ISIF = 2           # Relaxation of ions and cell shape, but not volume
+ISPIN = 2          # Spin-polarized calculation
+EDIFF = 1.0E-5     # Electronic convergence criterion
+EDIFFG = -0.02     # Ionic convergence criterion, eV/A
+NEDOS = 2001
+PREC = Accurate
+LWAVE = .FALSE.
+LCHARG = .FALSE.
+MAGMOM = 32*4 32*0 3*1  # Initial magnetic moments for Fe atoms
+ISYM = 0          # No symmetry
+
+# DFT+U parameters
+LDAU = .TRUE.
+LDAUTYPE = 2
+LDAUL = 2 0
+LDAUU = 4 0.0
+LDAUJ = 0.5 0.0
+LMAXMIX = 6
+LMAXMIN = 4
+
+# Dipole correction
+LDIPOL = .TRUE.
+IDIPOL = 3
+
+# Other settings
+IVDW = 12
+ALGO = Fast
+NCORE = 2
+PREC = Accurate
