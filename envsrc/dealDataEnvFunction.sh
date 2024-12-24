@@ -1082,3 +1082,123 @@ def find_adsorption_sites(filename)->list:
 adsorption_sites = find_adsorption_sites('$base_model')
 EOF
 }
+
+build_disorption_model(){
+    # 该函数使用来构建脱附模型，可以指定一个模型，并指定需要脱附的原子，生成脱附模型，脱附模型会尽可能的离其他的原子更远
+    # 使用方法：build_disorption_model Fe2O3_012.xyz O3 表示将会构建一个Fe2O3的脱附模型，并脱附O3
+    local base_model=$1
+    local disorbate=${2:-O3}
+    local min_distance=${3:-10}
+    local max_times=${4:-30}
+    python3 <<EOF
+import numpy as np
+import ase.io as ai
+import ase.visualize as av
+import ase.build as ab
+
+atoms = ai.read('$base_model')
+#av.view(atoms)
+cell = atoms.get_cell()
+cell_diagonal = [cell[0][0], cell[1][1], cell[2][2]]
+print(cell_diagonal)
+
+# 插入分子
+insert_atoms = ab.molecule('$disorbate')
+edge_length = 2
+
+# 初始的点为八个顶点
+init_point = np.array([
+    [cell_diagonal[0] - edge_length, cell_diagonal[1] - edge_length, -cell_diagonal[2] + edge_length],
+    [cell_diagonal[0] - edge_length, -cell_diagonal[1] + edge_length, cell_diagonal[2] - edge_length],
+    [cell_diagonal[0] - edge_length, -cell_diagonal[1] + edge_length, -cell_diagonal[2] + edge_length],
+    [cell_diagonal[0] + edge_length, -cell_diagonal[1] + edge_length, -cell_diagonal[2] + edge_length],
+    [-cell_diagonal[0] + edge_length, cell_diagonal[1] - edge_length, cell_diagonal[2] - edge_length],
+    [-cell_diagonal[0] + edge_length, cell_diagonal[1] - edge_length, -cell_diagonal[2] + edge_length],
+    [-cell_diagonal[0] + edge_length, -cell_diagonal[1] + edge_length, cell_diagonal[2] - edge_length],
+    [-cell_diagonal[0] + edge_length, -cell_diagonal[1] + edge_length, -cell_diagonal[2] + edge_length]
+])
+
+def wrap_around_cell(diff):
+    """
+    该函数使用来应用周期性边界条件，将超出一定范围的原子进行抓取回来
+    """
+    for j in range(3):
+        diff[:, j] = (diff[:, j] + cell_diagonal[j] / 2) % cell_diagonal[j] - cell_diagonal[j] / 2
+    return diff
+
+def wrap_point(position):
+    """
+    该函数用于应用周期性边界条件，将超出一定范围的单个点进行折回
+    """
+    wrapped_position = position.copy()
+    for j in range(3):
+        wrapped_position[j] = wrapped_position[j] % cell_diagonal[j]
+    return wrapped_position
+
+
+min_distances = []
+Nearest_atom_index = []
+def find_desorption_point(atoms, init_point,redistance=$min_distance):
+    """
+    该函数使用来初步的寻找脱附位置，并返回脱附位置的坐标
+    """
+    positions = atoms.get_positions()
+    desorption_point = []
+    for i in range(len(init_point)):
+        diff = positions - init_point[i]
+        diff = wrap_around_cell(diff)
+        temp_distance = np.linalg.norm(diff, axis=1)
+        min_distance = np.min(temp_distance)
+        Nearest_atom_index.append(np.argmin(temp_distance))
+        min_distances.append(min_distance)
+
+        if min_distance > redistance:
+            desorption_point.append(init_point[i])
+            return desorption_point
+
+    # 如果没有找到脱附位置，则进行更精细的搜索
+    index = np.argmin(min_distances)
+    _point = np.array([init_point[index]])
+    _near_atom = np.array([positions[Nearest_atom_index[index]]])
+    flag = True
+    while flag:
+        times = 1
+        _direction = (_near_atom - _point) / np.linalg.norm(_near_atom - _point)
+        _point = _point + 0.1 * _direction
+        _point = wrap_point(_point)
+        print(f"------------->第{times}次搜索")
+        diff = positions - _point
+        diff = wrap_around_cell(diff)
+        temp_distance = np.linalg.norm(diff, axis=1)
+        min_distance = np.min(temp_distance)
+        print(f"当前最小距离为{min_distance}\n")
+        if min_distance > redistance:
+            desorption_point = _point
+            return desorption_point
+        else:
+            index = np.argmin(temp_distance)
+            times += 1
+            _near_atom = np.array([positions[Nearest_atom_index[index]]])
+            flag = True if times < $max_times else False
+
+def build_desorption_structure(atoms, insert_atoms):
+    """
+    该函数使用来构建脱附结构
+    """
+    desorption_point = find_desorption_point(atoms, init_point)
+    if len(desorption_point) == 0:
+        print("没有找到脱附位置，请重新运行程序")
+        return
+    insert_atoms.translate(desorption_point)
+    insert_positions = insert_atoms.get_positions()
+    wrapped_positions = np.array([wrap_point(pos) for pos in insert_positions])
+    insert_atoms.set_positions(wrapped_positions)
+    
+    print(f"{insert_atoms}, type: {type(insert_atoms)}")
+    atoms.extend(insert_atoms)
+    atoms.write('POSCAR_desorption.vasp')
+    av.view(atoms)
+
+build_desorption_structure(atoms, insert_atoms)
+EOF
+}
