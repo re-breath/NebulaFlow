@@ -181,6 +181,14 @@ reclean(){
         echo "记忆已清空！"
     fi
 }
+recat(){
+#查看recc记忆的临时文件中的文件地址
+    if [ -f "$cc_tmpfile" ]; then
+        cat "$cc_tmpfile"
+    else
+        echo "临时文件 $cc_tmpfile 不存在，请先运行 recc 命令。"
+    fi
+}
 
 revv(){
     # 粘贴之前的所有记录下的文件，并且将其复制到当前的文件夹中
