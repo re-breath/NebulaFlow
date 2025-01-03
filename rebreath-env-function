@@ -25,6 +25,11 @@ export OMPI_MCA_btl_base_warn_component_unused=0
 #修改显示的样式
 #PS1='\[\033[01;36m\]\u——>NebulaFlow:\W\[\033[01;32m\]$\[\033[01;34m\] '
 
+loadrenv(){
+#该函数用来加载NebulaFlow的环境变量
+    source ~/.rebreath/rebreath-env-function
+}
+
 update_NebulaFlow(){
 # 该函数使用来快速的更新NebulaFlow函数库
     local initAddress=$(pwd)
@@ -166,7 +171,7 @@ relib() {
 #+++++++++++++++++++++++++++文件操作相关工具+++++++++++++++++++++++
 recc(){
 #创建一个临时的文件来保存指定文件的地址，方便后续对其进行操作
-    cc_tmpfile="/tmp/cc_fzmrkwjsbzz_pointer"
+    local cc_tmpfile="/tmp/cc_fzmrkwjsbzz_pointer"
     for i in "$@"; do
         local fileaddress=$(realpath "$i")
         echo "$fileaddress" >> "$cc_tmpfile"
@@ -176,6 +181,7 @@ recc(){
 
 reclean(){
 #清空记忆的临时文件
+    local cc_tmpfile="/tmp/cc_fzmrkwjsbzz_pointer"
     if [ -f "$cc_tmpfile" ]; then
         > "$cc_tmpfile"
         echo "记忆已清空！"
@@ -183,6 +189,7 @@ reclean(){
 }
 recat(){
 #查看recc记忆的临时文件中的文件地址
+    local cc_tmpfile="/tmp/cc_fzmrkwjsbzz_pointer"
     if [ -f "$cc_tmpfile" ]; then
         cat "$cc_tmpfile"
     else
@@ -192,6 +199,7 @@ recat(){
 
 revv(){
     # 粘贴之前的所有记录下的文件，并且将其复制到当前的文件夹中
+    local cc_tmpfile="/tmp/cc_fzmrkwjsbzz_pointer"
     local vv_dir=${1:-.}
     if [ -f "$cc_tmpfile" ]; then
         cat "$cc_tmpfile" | xargs -I {} cp -t "$vv_dir" {}
