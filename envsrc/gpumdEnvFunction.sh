@@ -316,22 +316,31 @@ def read_thermo(filename):
         labels = ['T','K','U','Px','Py','Pz','Pyz','Pxz','Pxy','Lx','Ly','Lz']
         for i in range(12):
             thermo[labels[i]] = data[:,i]
-    if data.shape[1] == 18:
+    elif data.shape[1] == 18:
         labels = ['T','K','U','Px','Py','Pz','Pyz','Pxz','Pxy','ax','ay','az','bx','by','bz','cx','cy','cz']
         for i in range(18):
             thermo[labels[i]] = data[:,i]
+    else:
+        raise ValueError("Invalid number of columns in thermo.out file")
     return thermo
 
 def get_volume(filename):
+    """
+    计算晶胞的体积
+    """
     thermo = read_thermo(filename)
-    line_num = len(thermo['ax'])
+    line_num = len(thermo['T'])
     V = np.zeros(line_num)
-    for i in range(line_num):
-        a1 = [thermo['ax'][i],thermo['ay'][i],thermo['az'][i]]
-        a2 = [thermo['bx'][i],thermo['by'][i],thermo['bz'][i]]
-        a3 = [thermo['cx'][i],thermo['cy'][i],thermo['cz'][i]]
-        V[i] = np.dot(np.cross(a1,a2),a3)
-    return V
+    if (len(thermo) == 18):
+        for i in range(line_num):
+            a1 = [thermo['ax'][i],thermo['ay'][i],thermo['az'][i]]
+            a2 = [thermo['bx'][i],thermo['by'][i],thermo['bz'][i]]
+            a3 = [thermo['cx'][i],thermo['cy'][i],thermo['cz'][i]]
+            V[i] = np.dot(np.cross(a1,a2),a3)
+        return V
+    else:
+        return thermo['Lx']*thermo['Ly']*thermo['Lz']
+
 V = get_volume(filename)
 for i in V:
     print(i)

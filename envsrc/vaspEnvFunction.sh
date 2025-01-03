@@ -113,12 +113,12 @@ add_kspacing_to_incar(){
     fi
 }
 
-fix_poscar_z() {
+fix_poscar_zFrc() {
 # 该函数将会固定z轴的下半部分，可以指定一个分数来，固定该分数内的原子
-# 调用方式：fix_poscar_z [frac]
+# 调用方式：fix_poscar_z [frac] file
 # 使用ase计算出z轴的下半部分的位置，然后调动vaspkit来固定
-    local frac=${1:-0.7}
-    local posfile=${2:-POSCAR}
+    local posfile=${1:-POSCAR}
+    local frac=${2:-0.7}
     read z_min z_max < <(python3 << EOF
 def find_min_max_pos_z(frac):
     import ase.io as ai
@@ -146,6 +146,25 @@ unfix_num=$((unfix_num - 1))
 echo "unfix atom numbers : $unfix_num"
 }
 
+
+fix_poscar_zCar() {
+# 该函数将会固定z轴的下半部分，指定最大和最小的z值
+# 调用方式：fix_poscar_zCar file [z_max] [z_min] 
+
+    local posfile=${1:-POSCAR}
+    local z_max=${2:-18}
+    local z_min=${3:-0}
+   
+echo "z_min: $z_min"
+echo "z_max: $z_max"
+if [ ! -f "POSCAR" ]; then
+    cp "$posfile" POSCAR > /dev/null
+fi
+echo -e "402 \n 1 \n 3 \n $z_min $z_max\n 2\n all" |vaspkit > /dev/null
+unfix_num=$(grep "T" POSCAR_FIX.vasp |wc -l)
+unfix_num=$((unfix_num - 1))
+echo "unfix atom numbers : $unfix_num"
+}
 
 
 generate_band_plot() {
