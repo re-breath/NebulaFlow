@@ -166,6 +166,16 @@ unfix_num=$((unfix_num - 1))
 echo "unfix atom numbers : $unfix_num"
 }
 
+clean_vasp_out(){
+# 该函数用来删除VASP输出文件
+    rm nohup.out CONTCAR OSZICAR WAVECAR PCDAT REPORT slurm-* vasp* config.* DOSCAR C* wait.log XDATCAR IBZKPT EIGENVAL REPORT OUTCAR PROCAR > /dev/null
+}
+
+add_kpoints() {
+# 该函数用来添加KPOINTS文件到当前目录
+    local level=${1:-0.03}
+    echo -e "102 \n 1 \n $level" | vaspkit > /dev/null
+}
 
 generate_band_plot() {
     #函数说明：该函数用来指定DFPT的band.yaml文件拿来画图
