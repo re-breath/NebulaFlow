@@ -230,3 +230,9 @@ EOF
     echo "声子谱图生成完毕。"
 }
 
+outcar_get_virial() {
+  # 该函数用来获取OUTCAR文件中的位力
+  # 调用方式：outcar_get_virial [outcar]
+  local outcar=${1:-OUTCAR}
+  grep -A 20 "FORCE on cell =-STRESS" $outcar | grep "Total" | tail -n 1 | awk '{ print $2,$5,$7,$5,$3,$6,$7,$6,$4 }'
+}
