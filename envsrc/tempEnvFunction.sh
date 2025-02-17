@@ -420,3 +420,19 @@ wait_complete_vasp_run(){
         exit 1
     fi
 }
+
+fix_adsorption_model(){
+# 该脚本使用来创建固定的文件夹并对指定的文件进行固定
+    local model_name=$1
+    local max_high=$2
+    mkdir fix_$max_high
+    cp $model_name fix_$max_high
+    cd fix_$max_high
+    fix_poscar_zCar $model_name $max_high
+}
+
+clean_poscar(){
+# 该函数使用来转化poscar的格式，ase生成的poscar可能会有很多重复的元素，使用该函数将其进行清理
+    poscar_to_xyz $1
+    xyz_to_poscar model_conversed.xyz
+}

@@ -114,6 +114,7 @@ get_grain_count(){
 #使用案例：get_dump_grain_count FCC dump_900.xyz
     local crystal_type=$1
     local filename=$2
+    local mingrainsize=${3:-100}
     local itype_upper=$(echo "$crystal_type" | tr '[:lower:]' '[:upper:]')
     local crystal_type_list="OTHER FCC HCP BCC ICO SC CUBIC_DIAMOND HEX_DIAMOND GRAPHENE"
     if [[ ! $crystal_type_list =~ (^|[[:space:]])"$itype_upper"($|[[:space:]]) ]]; then
@@ -152,7 +153,7 @@ def plot_grain_zone(filename):
     ptm_modifier.output_orientation = True
     pipeline.modifiers.append(ptm_modifier)
     
-    grain_segmentation_modifier = ovito.modifiers.GrainSegmentationModifier()
+    grain_segmentation_modifier = ovito.modifiers.GrainSegmentationModifier(min_grain_size=$mingrainsize)
     pipeline.modifiers.append(grain_segmentation_modifier)
     
     grain_cout = []
