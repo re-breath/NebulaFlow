@@ -240,7 +240,9 @@ vaspstart_geo_optstage1(){
  #NELM   =  260           (Max electronic SCF steps)
  NSW    =   30
  EDIFF  =  1E-02      (SCF energy convergence, in eV)
- IVDW = 12
+ 
+ LUSE_VDW = .TRUE.
+ IVDW = 11
  KSPACING = 0.3
 EOF
     vasprun_dcu 4
@@ -272,7 +274,8 @@ vaspstart_geo_optstage2(){
  #NELM   =  260           (Max electronic SCF steps)
  NSW    =   100
  EDIFF  =  1E-04     (SCF energy convergence, in eV)
- IVDW = 12
+ LUSE_VDW = .TRUE.
+ IVDW = 11
  KSPACING = 0.3
 EOF
     vasprun_dcu 4
@@ -304,7 +307,8 @@ vaspstart_geo_optstage3(){
  #NELM   =  260           (Max electronic SCF steps)
  NSW    =   100
  EDIFF  =  1E-04     (SCF energy convergence, in eV)
- IVDW = 12
+ LUSE_VDW = .TRUE.
+ IVDW = 11
  KSPACING = 0.2
 EOF
     vasprun_dcu 4
@@ -339,7 +343,8 @@ LORBIT =  11
 NEDOS  =  2001        
 NELM   =  120         
 EDIFF  =  1E-05        
-IVDW = 12
+LUSE_VDW = .TRUE.
+IVDW = 11
 KSPACING = 0.2 
 EOF
     echo "task adress : $PWD"
@@ -371,7 +376,8 @@ LORBIT =  11
 NEDOS  =  2001        
 NELM   =  120         
 EDIFF  =  1E-05        
-IVDW = 12 
+LUSE_VDW = .TRUE.
+IVDW = 11 
 KSPACING = 0.2 
 EOF
     echo "task adress : $PWD"
@@ -436,3 +442,24 @@ clean_poscar(){
     poscar_to_xyz $1
     xyz_to_poscar model_conversed.xyz
 }
+
+use_pbc_run(){
+    mkdir -p use_pbc
+    cp del_poisson/elctron.inp del_poisson/*.xyz use_pbc/
+    cd use_pbc/
+
+    sed -i 's/PERIODIC NONE/PERIODIC XYZ/' elctron.inp 
+    cp2kstart elctron.inp 
+
+}
+
+use_sccs_run(){
+    mkdir -p use_sccs
+    cp elctron.inp *xyz use_sccs/
+    cd use_sccs/
+
+    sed -i '/&END SCF/a\    &SCCS\n      ALPHA [N*m^-1] 0.0\n      BETA [kbar] 0.0\n      GAMMA [mN/m] 0.0\n      DIELECTRIC_CONSTANT 78.36 #Water\n      EPS_SCCS 1E-6 #Default. Requested accuracy for the SCCS iteration cycle\n      EPS_SCF 0.5 #Default. SCCS iteration is activated only if SCF iteration is converged to this threshold\n      MAX_ITER 100 #Default. Maximum number of SCCS iteration steps\n      DERIVATIVE_METHOD FFT #Default. Method for calculation of numerical derivatives. Can also be CD3, CD5, CD7\n      &ANDREUSSI\n        RHO_MAX 0.0035 #Default\n        RHO_MIN 0.0001 #Default\n      &END ANDREUSSI\n    &END SCCS' elctron.inp 
+
+    cp2kstart elctron.inp
+}
+
