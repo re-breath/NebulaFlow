@@ -104,8 +104,26 @@ xyz_to_poscar() {
     python3 -c "from ovito.io import import_file, export_file; pipeline = import_file('$1'); export_file(pipeline, 'POSCAR_convered', 'vasp')"
 }
 
+xyz_to_pos() {
+    python3 << EOF
+import ase.io
+filename = '$1'
+xyzinfo = ase.io.read(filename)
+ase.io.write('POSCAR_convered', xyzinfo, format='vasp')
+EOF
+}
+
 poscar_to_xyz() {     
        	python3 -c "from ovito.io import import_file, export_file; pipeline = import_file('$1'); export_file(pipeline, 'model_conversed.xyz', 'xyz',columns=['Particle Type', 'Position.X', 'Position.Y', 'Position.Z'])"
+}
+
+pos_to_xyz(){
+    python3 << EOF
+import ase.io
+filename = '$1'
+xyzinfo = ase.io.read(filename)
+ase.io.write('model_conversed.xyz', xyzinfo, format='xyz')
+EOF
 }
 
 
@@ -1277,4 +1295,25 @@ EOF
     python3 disorption_model.py > build_desorption_model.log 2>&1
     rm disorption_model.py
     tail -n 1 build_desorption_model.log
+}
+
+
+mkandsort(){
+# 该函数可以读取一类指定后缀的文件，将会创建一系列文件夹而后将文件分类到文件夹中
+# 例如指定xyz类型的文件，则会创建一系列去除xyz后缀的文件夹，将xyz文件放到指定的xyz文件夹中
+
+    cut_name=${1:-xyz}
+    for i in $(ls *.$cut_name |xargs -n 1);do 
+        fore_name=${i%.*}
+        mkdir -p $fore_name
+        cp $i $fore_name
+    done
+}
+
+sendtoall(){
+#该函数将会将一个指定的文件送到当前目录下所有的文件夹中
+    local sfile=${1}
+    for i in $(find $PWD -maxdepth 1 -mindepth 1  -type d);do
+        cp $sfile $i
+    done
 }
