@@ -257,7 +257,63 @@ compute_elastic_moduli(){
     cat elastic_calorine.txt
 }
 
+gpumdstart_rebreath(){
+    #!/bin/bash
+    #本程序建立是为了简化在曙光上使用gpumd的流程，该程序默认任务名为执行命令的文件夹的名字，默认使用1dcu与1cpu
+    
+    dcu_num=1
+    for arg in "$@"; do
+        if [[ $arg = "-n" ]]; then
+        dcu_num=${2:-1}
+        break
+        fi
+    done
+    
+    job_name=$(basename "$PWD")
+    
+    echo "#!/bin/bash
+    #SBATCH -p xahdnormal
+    #SBATCH -N  1
+    #SBATCH --ntasks-per-node=$dcu_num
+    #SBATCH --gres=dcu:$dcu_num
+    #SBATCH --time 240:00:00
+    #SBATCH --comment=GPUMD
+    #SBATCH -o $PWD/std.out.%j
+    #SBATCH -e $PWD/std.err.%j
+    
+    # MARK_CMD
+    source /work/home/rebreath/sbatch_need/gpumd_env.sh
+    /work/share/acmtrwrxv5/GPUMD/src/gpumd" | sbatch -J "$job_name"
+}
 
+gpumdstart_zwj(){
+    #!/bin/bash
+    #本程序建立是为了简化在曙光上使用gpumd的流程，该程序默认任务名为执行命令的文件夹的名字，默认使用1dcu与1cpu
+    
+    dcu_num=1
+    for arg in "$@"; do
+        if [[ $arg = "-n" ]]; then
+        dcu_num=${2:-1}
+        break
+        fi
+    done
+    
+    job_name=$(basename "$PWD")
+    echo "
+#!/bin/bash
+#SBATCH -N  1
+#SBATCH --ntasks-per-node=$dcu_num
+#SBATCH --gres=dcu:$dcu_num
+#SBATCH --comment=GPUMD
+#SBATCH -p wzhdtest
+
+# MARK_CMD
+module purge
+module use /public/software/modules /opt/hpc/software/modules
+source /work/home/acyrhkta3v/apprepo/gpumd/3.9.5-dtk24.04/scripts/env.sh
+/work/home/acyrhkta3v/apprepo/gpumd/3.9.5-dtk24.04/app/bin/gpumd" | sbatch -J "$job_name"
+
+}
 
 start_gpumd(){
 #该函数用来启动gpumd的计算，对于dcu可以进行制定核数的计算,可以使用来代替gpumd的启动

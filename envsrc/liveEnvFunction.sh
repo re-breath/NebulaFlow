@@ -53,3 +53,56 @@ convert_video_to_gif() {
         return 1
     fi
 }
+
+compare_folders() {
+    # 检查参数数量
+    if [ "$#" -ne 2 ]; then
+        echo "Usage: compare_folders <folder1> <folder2>"
+        return 1
+    fi
+
+    # 获取文件夹路径
+    folder1="$1"
+    folder2="$2"
+
+    # 检查文件夹是否存在
+    if [ ! -d "$folder1" ]; then
+        echo "Error: Folder '$folder1' does not exist."
+        return 1
+    fi
+
+    if [ ! -d "$folder2" ]; then
+        echo "Error: Folder '$folder2' does not exist."
+        return 1
+    fi
+
+    # 获取两个文件夹中的文件列表
+    files1=$(ls "$folder1")
+    files2=$(ls "$folder2")
+
+    # 检查同名文件
+    for file in $files1; do
+        if [ -f "$folder1/$file" ] && [ -f "$folder2/$file" ]; then
+            # 比较同名文件
+            if ! diff -q "$folder1/$file" "$folder2/$file" > /dev/null; then
+                echo "Files differ: $file"
+            else
+                echo "Files are identical: $file"
+            fi
+        fi
+    done
+
+    # 检查 folder2 中独有的文件
+    for file in $files2; do
+        if [ -f "$folder2/$file" ] && [ ! -f "$folder1/$file" ]; then
+            echo "File only in $folder2: $file"
+        fi
+    done
+
+    # 检查 folder1 中独有的文件
+    for file in $files1; do
+        if [ -f "$folder1/$file" ] && [ ! -f "$folder2/$file" ]; then
+            echo "File only in $folder1: $file"
+        fi
+    done
+}
