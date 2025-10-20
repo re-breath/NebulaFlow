@@ -1,5 +1,35 @@
 # 该分库使用来存放处理数据的函数，包括对于xyz类文件的处理等，较为通用的函数
 
+atom_dist() {
+# 该函数使用来快速计算两个原子对之间的距离
+# 使用方法：atom_dist x1 y1 z1 x2 y2 z2 输出为两个原子对的距离，不考虑周期性边界条件
+    if [ "$#" -ne 6 ]; then
+        echo "Usage: atom_dist x1 y1 z1 x2 y2 z2" >&2
+        return 1
+    fi
+
+    # 用 awk 做浮点计算，避免 bash 整数截断
+    awk -v x1="$1" -v y1="$2" -v z1="$3" \
+        -v x2="$4" -v y2="$5" -v z2="$6" \
+        'BEGIN {
+            dx = x1 - x2;
+            dy = y1 - y2;
+            dz = z1 - z2;
+            printf "Atom pair dist : %.15g\n", sqrt(dx*dx + dy*dy + dz*dz);
+        }'
+}
+
+view_atom(){
+# 该函数使用来快速查看原子位置
+# 该函数可以快速查看原子结构，使用方法为 view_atom POSCAR（或者类似的文件）
+    python3 << EOF
+import ase.io
+import ase.visualize as av
+atominfo = ase.io.read('$1')
+av.view(atominfo)
+EOF
+}
+
 
 zone_group_to_xyz(){
 # idea from bessel
@@ -115,6 +145,24 @@ EOF
 
 poscar_to_xyz() {     
        	python3 -c "from ovito.io import import_file, export_file; pipeline = import_file('$1'); export_file(pipeline, 'model_conversed.xyz', 'xyz',columns=['Particle Type', 'Position.X', 'Position.Y', 'Position.Z'])"
+}
+
+data_to_xyz(){
+    python3 -c "from ovito.io import import_file, export_file; pipeline = import_file('$1'); export_file(pipeline, 'model_conversed.xyz', 'xyz',columns=['Particle Type', 'Position.X', 'Position.Y', 'Position.Z'])"
+}
+
+xyz_to_pdb(){
+    python3 << EOF
+import ase.io
+filename = '$1'
+xyzinfo = ase.io.read(filename)
+ase.io.write('convered.pdb', xyzinfo)
+EOF
+}
+
+data_to_pdb(){
+    data_to_xyz $1
+    xyz_to_pdb model_conversed.xyz
 }
 
 pos_to_xyz(){
@@ -342,6 +390,7 @@ plot_crysralinity_fraction(){
     # 输入的晶型
     itype=$1
     argfile=$2
+    rmse_cutoff=${3:-'0.1'}
     # 将 itype 转换为大写
     itype_upper=$(echo "$itype" | tr '[:lower:]' '[:upper:]')
 
@@ -377,6 +426,7 @@ def plot_graphene_counts(file_pattern, color, label):
     pipeline = import_file(file_pattern, multiple_frames=True)
 
     ptm_modifier = PolyhedralTemplateMatchingModifier()
+    ptm_modifier.rmsd_cutoff = float($rmse_cutoff)
     ptm_modifier.structures[PolyhedralTemplateMatchingModifier.Type.$itype_upper].enabled = True
     pipeline.modifiers.append(ptm_modifier)
 
