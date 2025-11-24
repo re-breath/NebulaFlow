@@ -484,3 +484,11 @@ repeat_rungpumd(){
         cd ..
     done
 }
+
+cp2desktop(){
+    cp -r $1 /mnt/c/Users/rebreath.REBREATH-TX4/Desktop
+}
+
+mv2desktop(){
+    mv $1 /mnt/c/Users/rebreath.REBREATH-TX4/Desktop
+}

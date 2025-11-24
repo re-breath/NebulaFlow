@@ -92,10 +92,19 @@ lammpsrun(){
  
 module purge
 source /work/home/rebreath/apprepo/lammps/12Dec18-intelmpi2017/scripts/env.sh
- 
 mpirun -np $ncore lmp -i  $in_file
 EOF
 
     sbatch lmp_cpu.slurm
     echo "Lammps runing $in_file with $ncore cores"
+}
+
+# 该函数使用来排序LAMMPS的data文件中的原子ID
+# $1: 输入的data文件
+# 使用方法： sortlmpdata input.data
+sortlmpdata(){
+    local in_file="$1"
+    local out_file="${in_file%.*}_sort.data"
+    cp ~/.rebreath/deal_data/sortlmpdata.py .
+    python3 sortlmpdata.py $in_file $out_file
 }
