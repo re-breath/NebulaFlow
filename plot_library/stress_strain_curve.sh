@@ -2,8 +2,18 @@
 #该脚本用于提取thermo.out文件中的应力-应变曲线，自动判断是计算什么样的应力应变曲线（对文件名进行关键词检索）
 #from rebreath
 
+#注意，该脚本需要保证gpumd的thermo.out文件的格式不变，否则会导致提取结果错误，目前gpumd的thermo.out文件的格式为：
+#column   1 2 3 4  5  6  7   8   9   10 11 12 13 14 15 16 17 18
+#quantity T K U Pxx Pyy Pzz Pyz Pxz Pxy ax ay az bx by bz cx cy cz
+#之前还有一个版本为12列的，目前已经删除，现在只有18列
 
 date_file=${1:-"thermo.out"}
+
+# 检查data_file文件有多少列，如果不是18列那就报错
+if [ $(head -n 1 $date_file | wc -w) -ne 18 ]; then
+    echo "Error: $date_file GPUMD新版本要求thermo.out必须是18列的文件，无法提取应力-应变曲线/n请检查文件格式是否正确，或者是否是旧版本的thermo.out文件"
+    exit 1
+fi
 
 flag=0
 
@@ -27,7 +37,7 @@ process_data_x() {
         return 1
     fi
 
-    awk -v Lx_0="$Lx_0" ' # 通过-v选项将Lx_0传递给awk命令
+    awk -v Lx_0="$Lx_0" ' 
         function abs(x) { return x < 0 ? -x : x; }
         {
             # 计算应变，ε = (Lx - Lx_0) / Lx_0
@@ -41,17 +51,17 @@ process_data_x() {
 }
 
 process_data_y() {
-    Ly_0=$(awk 'NR==1 {print $11}' $date_file)
+    Ly_0=$(awk 'NR==1 {print $15}' $date_file)
     output_file="stress_strain_curve.txt"
     if [ -z "$Ly_0" ]; then
         echo "Error: Ly_0 is not set."
         return 1
     fi
 
-    awk -v Ly_0="$Ly_0" ' # 通过-v选项将Lx_0传递给awk命令
+    awk -v Ly_0="$Ly_0" ' 
         function abs(x) { return x < 0 ? -x : x; }
         {
-            strain = ($11 - Ly_0) / Ly_0
+            strain = ($15 - Ly_0) / Ly_0
             stress = $5
             stress_abs = abs(stress)
             print strain, stress_abs
@@ -60,17 +70,17 @@ process_data_y() {
 }
 
 process_data_z() {
-    Lz_0=$(awk 'NR==1 {print $12}' $date_file)
+    Lz_0=$(awk 'NR==1 {print $18}' $date_file)
     output_file="stress_strain_curve.txt"
     if [ -z "$Lz_0" ]; then
         echo "Error: Ly_0 is not set."
         return 1
     fi
 
-    awk -v Lz_0="$Lz_0" ' # 通过-v选项将Lx_0传递给awk命令
+    awk -v Lz_0="$Lz_0" ' 
         function abs(x) { return x < 0 ? -x : x; }
         {
-            strain = ($12 - Lz_0) / Lz_0
+            strain = ($18 - Lz_0) / Lz_0
             stress = $6
             stress_abs = abs(stress)
             print strain, stress_abs
@@ -131,4 +141,6 @@ EOF
 
 check_directory_name
 check_variable_and_process_data
-replot stress_strain_curve.txt
+#replot stress_strain_curve.txt
+cp ~/.rebreath/plot_library/plot_stress_strain_curve.py .
+python3 plot_stress_strain_curve.py

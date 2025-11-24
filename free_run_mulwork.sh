@@ -4,6 +4,7 @@
 #注意：对于nep，gpumd等任务，想要使其不与外界进行交互静默运行可以使用nohup nep/gpumd 2>&1 &
 work1='bash run_gpumd_5.sh'
 #work2='cd 64atoms0_5fs;bash run_gpumd_5.sh'
+#free_time_run 'nohup gpumd > nohup.out 2>&1 &'
 
 
 task_commands=()
