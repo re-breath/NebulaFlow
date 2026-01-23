@@ -1,3 +1,4 @@
+# 处理xrd.exe输出的SFACTOR_L1_L2_na.data文件
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.ticker import ScalarFormatter

@@ -1,10 +1,10 @@
  # NVT or NPT
-#本输入文件的主要的目的是进行aimd模拟，后将其输出整理为gpumd的训练集，该脚本会输出位力（应力）信息
-@SET ENSEMBLE_EVN NPT
-@SET OT_ACTIVE    TRUE
-@SET PROJECT_NAME BN_AIMD
-@SET XYZFILE      BN.xyz
-@SET CIFFILE      BN_mp_984.cif
+ # 使用该脚本进行了合金吸附臭氧的计算，效果不佳
+@SET ENSEMBLE_EVN NONE
+@SET OT_ACTIVE    FALSE
+@SET PROJECT_NAME FeAl2O4_AIMD
+@SET XYZFILE      slab.xyz
+@SET CIFFILE      ???.cif
 @SET NAME         ${PROJECT_NAME}
 @SET RESTART      FALSE
 @SET everyTime    10
@@ -13,7 +13,7 @@
 
 &GLOBAL
     PROJECT_NAME  ${PROJECT_NAME}
-    RUN_TYPE    MOLECULAR_DYNAMICS
+    RUN_TYPE    ENERGY
     PRINT_LEVEL LOW
 &END GLOBAL
 
@@ -21,9 +21,9 @@
     @IF (${ENSEMBLE_EVN} == NPT)
     &MD
         ENSEMBLE NPT_I
-        STEPS 10000
+        STEPS 1000
         TEMPERATURE ${V_temperature}
-        TIMESTEP 0.5
+        TIMESTEP 1.0
         &BAROSTAT
             PRESSURE ${V_pressure}
             TIMECON 100
@@ -37,15 +37,15 @@
             &END ENERGY
             &PROGRAM_RUN_INFO
                 &EACH
-                   MD 100
+                   MD 10
                 &END EACH
             &END PROGRAM_RUN_INFO
         &END PRINT
         &THERMOSTAT
             TYPE NOSE
-   	        &NOSE
+                &NOSE
                 TIMECON 100.
-      	    &END NOSE
+            &END NOSE
         &END THERMOSTAT
     &END MD
    &GEO_OPT
@@ -60,7 +60,7 @@
    @IF (${ENSEMBLE_EVN} == NVT)
    &MD
         ENSEMBLE NVT
-        STEPS 10000
+        STEPS 1000
         TEMPERATURE ${V_temperature}
         TIMESTEP 0.5
         &PRINT
@@ -72,7 +72,7 @@
             &END ENERGY
             &PROGRAM_RUN_INFO
                 &EACH
-                    MD 100
+                    MD 10
                 &END EACH
             &END PROGRAM_RUN_INFO
         &END PRINT
@@ -108,6 +108,7 @@
             &END EACH
         &END VELOCITIES
         &TRAJECTORY  SILENT
+            FORMAT DCD_ALIGNED_CELL
             &EACH
                 MD ${everyTime}
             &END EACH
@@ -121,48 +122,49 @@
 &END MOTION
 
 &FORCE_EVAL
-  METHOD Quickstep 
+  METHOD Quickstep
   @IF (${ENSEMBLE_EVN} == NPT)
   STRESS_TENSOR ANALYTICAL
   @ENDIF
   &SUBSYS
-     &KIND N
-      ELEMENT   N
-      BASIS_SET DZVP-GTH-PADE     #在BASIS_SET文件中可以找到硅元素的DZVP-GTH-PADE基组。D代表Double。double-ζ with polarisation basis optimised for Geodecker-Teter-Hutter PADE LDA pseudopotential
-      POTENTIAL GTH-PADE-q5       #在GTH_POTENTIAL文件中可以找到硅元素的GTH-PADE-q4赝势。Geodecker-Teter-Hutter PADE LDA pseudopotential with 4 valence electrons
+    &KIND Fe
+      ELEMENT   Fe
+      BASIS_SET DZVP-MOLOPT-SR-GTH
+      POTENTIAL GTH-PADE-q16
     &END KIND
-    &KIND B
-        ELEMENT B
-        BASIS_SET DZVP-GTH-PADE
+    &KIND O
+        ELEMENT O
+        BASIS_SET DZVP-MOLOPT-SR-GTH
+        POTENTIAL GTH-PADE-q6
+    &END KIND
+    &KIND Al
+        ELEMENT   Al
+        BASIS_SET DZVP-MOLOPT-SR-GTH
         POTENTIAL GTH-PADE-q3
     &END KIND
      &CELL
-       CELL_FILE_FORMAT CIF
-       CELL_FILE_NAME ${CIFFILE}
-       MULTIPLE_UNIT_CELL  4 4 2
+       A 26.430949139219347 0.0 0.0
+       B 7.929284741765804 8.76615411477576 0.0
+       C 0.0 0.0 36.95419420582951
+       MULTIPLE_UNIT_CELL  1 1 1
      &END CELL
      &TOPOLOGY
        COORD_FILE_NAME ${XYZFILE}
        COORD_FILE_FORMAT  XYZ
-       &CENTER_COORDINATES ON
-       &END CENTER_COORDINATES
-       &GENERATE
-        REORDER .TRUE.
-       &END GENERATE
      &END TOPOLOGY
   &END SUBSYS
-  &DFT                          
-    BASIS_SET_FILE_NAME  BASIS_SET
+  &DFT
+    BASIS_SET_FILE_NAME  BASIS_MOLOPT
     POTENTIAL_FILE_NAME  GTH_POTENTIALS
-    &QS                           
+    &QS
       EPS_DEFAULT 1.0E-10
     &END QS
-    &MGRID                        
-      NGRIDS 4                    
-      CUTOFF 500                 
+    &MGRID
+      NGRIDS 4
+      CUTOFF 400
       REL_CUTOFF 60
     &END MGRID
-    &XC                       
+    &XC
       &XC_FUNCTIONAL PADE
       &END XC_FUNCTIONAL
       &vdW_POTENTIAL
@@ -175,21 +177,21 @@
       &END vdW_POTENTIAL
     &END XC
     &SCF
-        SCF_GUESS ATOMIC           
-        EPS_SCF 1.0E-4             
-        MAX_SCF 30 
+        SCF_GUESS ATOMIC
+        EPS_SCF 1.0E-4
+        MAX_SCF 30
         &OUTER_SCF ON
           EPS_SCF 1.0E-6
           MAX_SCF 5
         &END
         @IF (${OT_ACTIVE} == FALSE)
-        &DIAGONALIZATION  ON        
-            ALGORITHM STANDARD        
+        &DIAGONALIZATION  ON
+            ALGORITHM STANDARD
         &END DIAGONALIZATION
-        &MIXING  T                  
-         METHOD BROYDEN_MIXING     
-         ALPHA 0.4                 
-         NBROYDEN 8               
+        &MIXING  T
+         METHOD BROYDEN_MIXING
+         ALPHA 0.4
+         NBROYDEN 8
         &END MIXING
         @ENDIF
         @IF (${OT_ACTIVE} == TRUE)
@@ -206,7 +208,7 @@
     &END SCF
   &END DFT
   &PRINT
-    &FORCES ON                    
+    &FORCES ON
     &END FORCES
   &END PRINT
 &END FORCE_EVAL

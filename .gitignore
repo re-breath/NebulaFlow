@@ -3,7 +3,8 @@ whl_files/
 
 # 忽略 .vscode 文件夹
 .vscode/
-
+.git/
+.wink/
 # 忽略 lab 文件夹
 lab/
 

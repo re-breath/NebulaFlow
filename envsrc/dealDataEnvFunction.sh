@@ -356,6 +356,22 @@ bo_cut_off      0.3  # bo cut-off for identifying molecules for lammps/reax conn
 distance_cut_off 1.7 #This cut_off will be used to identify bonds based on interatomic distace. Default is 1.7
 empty_bin_cut_off 1   #If any bin contains atoms less than or equal to this number, then it will be tagged as empty
 EOF
+
+    cp $argfile opted_back
+
+    # 提取第二行的 Lattice 信息并生成替换行
+    new_line=$(awk 'NR==2 {
+    lattice=$0
+    sub(/.*Lattice="/,"",lattice)
+    sub(/".*/,"",lattice)
+    split(lattice,b," ")
+    printf("0 %s 0 %s 0 %s 90 90 90", b[1], b[5], b[9])
+    }' opted_back)
+
+    # 用 sed 替换第二行
+    sed "2c\\$new_line" opted_back > $argfile
+
+
     # 运行cf_analyze
     $cf_exe 
 
@@ -374,24 +390,13 @@ EOF
     66      - Rcell (Size of computational cell for g(r))	
      1      - NRCFLAG (!Nearest image convention flag (0 = Not used, 1 = used))
      0      - WFLAG (If window function is used (0 = Not used, 1 = sinc function is used, 2 = Hann function))	
-1.5418      - LAMBDA (Wavelength to calculate in 2Theta, ANGSTROMS)
+1.5406      - LAMBDA (Wavelength to calculate in 2Theta, ANGSTROMS)
      1      - UNITFLAG (Units to calculate scattering angle (0 = Inverse angstroms, 1 = 2Theta))
      1      - AFACTORFLAG (Account for atomic scattering factor (0 = Calculate structure factor, 1 = Calculate intensity))
 EOF
-    cp $argfile opted_back
+    
 
-    # 提取第二行的 Lattice 信息并生成替换行
-    new_line=$(awk 'NR==2 {
-    lattice=$0
-    sub(/.*Lattice="/,"",lattice)
-    sub(/".*/,"",lattice)
-    split(lattice,b," ")
-    printf("0 %s 0 %s 0 %s 90 90 90", b[1], b[5], b[9])
-    }' opted_back)
-
-    # 用 sed 替换第二行
-    sed "2c\\$new_line" opted_back > $argfile
-
+   
     xrd
     cp ~/.rebreath/plot_library/plot_rdf_xrd.py ./
     python3 plot_rdf_xrd.py 
@@ -403,10 +408,10 @@ EOF
 }
 
 # 处理XRD.exe程序输出的文件
-deal_xrd(){
-    cp ~/.rebreath/plot_library/plot_rdf_xrd.py ./
-    python3 plot_rdf_xrd.py 
-}
+# deal_xrd(){
+#     cp ~/.rebreath/plot_library/plot_rdf_xrd.py ./
+#     python3 plot_rdf_xrd.py 
+# }
 
 select_xyz_configs(){
 #选择xyz文件中的某一组构型，并输出到一个新的xyz文件中
@@ -1188,60 +1193,69 @@ build_adsorption_model(){
 # 使用方法： build_adsorption_model alphaFe2O3_012.xyz O3 表示将会构建一个alphaFe2O3的基底模型，并吸附O3
     local base_model=$1
     local adsorbate=${2:-O3}
+    if [ -z "$base_model" ]; then
+        echo 'Use method: build_adsorption_model $base_model $adsorbate'
+        return 1
+    fi
 
     python3 <<EOF
 import ase.io as ai
-from pymatgen.analysis.adsorption import AdsorbateSiteFinder,plot_slab
-from pymatgen.core.structure import Structure
-import matplotlib.pyplot as plt
-import ase.build as ab
-#import ase.visualize as av
-import numpy as np
+from pymatgen.analysis.adsorption import AdsorbateSiteFinder, plot_slab
 from pymatgen.io.ase import AseAtomsAdaptor
-import os
+import ase.build as ab
+import matplotlib.pyplot as plt
+import numpy as np
 
-ozone_ab = ab.molecule("$adsorbate")
-def calc_key_lengthandangle(atoms)->tuple:
-    """
-    该函数使用来计算ozone的键长和键角
-    """
-    # 计算键长
+# 构建吸附分子
+adsorbate_ab = ab.molecule("$adsorbate")
+adsorbate = AseAtomsAdaptor.get_molecule(adsorbate_ab)
+
+def calc_key_lengthandangle(atoms) -> tuple:
+    """计算分子的键长和键角"""
     key_length = atoms.get_distance(0, 1)
-    # 计算键角
     key_angle = atoms.get_angle(0, 1, 2)
     return key_length, key_angle
 
-def find_adsorption_sites(filename)->list:
-    """
-    该函数使用来查找吸附点
-    """
+def find_adsorption_sites(filename) -> list:
+    """查找吸附点并生成吸附结构"""
     atoms = ai.read(filename)
-    ai.write("temp.cif", atoms)
-    struct = Structure.from_file('temp.cif')
+    struct = AseAtomsAdaptor.get_structure(atoms)  # ✅ 直接转换，无需写入 .cif
 
+    # 创建吸附查找器
     asf = AdsorbateSiteFinder(struct)
-    ozone = AseAtomsAdaptor.get_molecule(ozone_ab)
-    # fig = plt.figure()
-    # plot_slab(FeAl2O4_110, adsorption_sites=True,ax=fig.add_subplot(111))
-    # plt.show()
+
+    # 查找吸附点
     adsorption_sites = asf.find_adsorption_sites()
     print(f"\nFile: {filename}\nAdsorption sites found:\n {adsorption_sites}")
-    #print(adsorption_sites['all'][0])
-    for idx,site in enumerate(adsorption_sites['all']):
-        print(f"Adsorption site {idx+1}: {site}")
-        absorbed_structure = asf.add_adsorbate(molecule=ozone, ads_coord=site)
-        atoms_temp = AseAtomsAdaptor.get_atoms(absorbed_structure)
-        output_filename = f"adsorbed_${adsorbate}_{idx}.vasp"
-        #absorbed_structure.to(filename=output_filename)
-        ai.write(output_filename, atoms_temp)
-        print(f"Saved adsorbed structure to {output_filename}")
 
-    os.remove("temp.cif")
+    # 遍历吸附点并生成结构
+    for idx, site in enumerate(adsorption_sites['all']):
+        print(f"Adsorption site {idx+1}: {site}")
+        absorbed_structure = asf.add_adsorbate(molecule=adsorbate, ads_coord=site)
+        atoms_temp = AseAtomsAdaptor.get_atoms(absorbed_structure)
+        output_filename = f"adsorbed_structure_{idx}.xyz"
+        ai.write(output_filename, atoms_temp)
+        print(f"✅ Saved adsorbed structure to {output_filename}")
 
     return adsorption_sites
 
+# 执行吸附点查找
 adsorption_sites = find_adsorption_sites('$base_model')
 EOF
+}
+
+get_molecule(){
+    # 该函数用来获取一个分子的xyz文件
+    # 使用方法：get_molecule HCOOH 表示将会获取一个HCOOH的分子的xyz文件
+    cat << EOF > getmolecule.py
+import ase.io as ai
+import ase.build as ab
+
+# 构建吸附分子
+adsorbate_ab = ab.molecule("$1")
+ai.write('adsorbate.xyz', adsorbate_ab)
+EOF
+    python3 getmolecule.py
 }
 
 build_disorption_model(){
@@ -1461,4 +1475,10 @@ sendtoall(){
     for i in $(find $PWD -maxdepth 1 -mindepth 1  -type d);do
         cp $sfile $i
     done
+}
+
+calc_xrd_usedebyer(){
+# 该函数使用debyer计算xrd,目前主要计算碳纤维的xrd
+    local xyzfile=${1:-opted.xyz}
+    debyer -x -l1.5406 -f5 -t80 -s0.02 -o xrd.dat $xyzfile
 }
