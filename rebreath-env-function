@@ -16,6 +16,8 @@ while IFS= read -r -d '' file; do
     source "$file"
 done < <(find ~/.rebreath/envsrc -type f -print0)
 
+# 自定义bash prompt,类似kali格式
+#export PS1="\n[\u@\h \w]\n->\$ "
 
 #关闭vasp组件未使用警告
 export OMPI_MCA_btl_base_warn_component_unused=0

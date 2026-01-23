@@ -1,0 +1,326 @@
+# 该脚本使用来与自研MD软件LSMD进行对比，可以输出OPLSaa势能各个组分的能量，力，压强，位力。
+# ---------------- Bond-only ----------------
+clear
+units       real
+atom_style  full
+
+bond_style      harmonic
+angle_style     zero nocoeff
+dihedral_style  zero nocoeff
+pair_style      zero 10.0 nocoeff
+
+read_data   eqoptedsort.data
+
+thermo      1
+thermo_style custom step etotal ebond eangle edihed evdwl ecoul  press pxx pyy pzz pxy pxz pyz  
+
+compute     f_bond all property/atom fx fy fz
+
+variable        Fx atom c_f_bond[1]/(23.0609)
+variable        Fy atom c_f_bond[2]/(23.0609)
+variable        Fz atom c_f_bond[3]/(23.0609)
+
+dump        dump_bond all custom 1 bondforce.log id type x y z v_Fx v_Fy v_Fz
+
+dump_modify dump_bond sort id
+dump_modify dump_bond format float %14.6f
+dump_modify dump_bond format int %8d
+
+# 每原子位力（只取势能部分 virial，不含动能）
+compute         s all stress/atom NULL virial
+variable        Vol equal vol
+
+
+# 定义变量：去掉负号（stress/atom 是负的位力），并把 kcal/mol 转换为 eV
+variable        Wxx atom -c_s[1]/(23.0609*${Vol})
+variable        Wyy atom -c_s[2]/(23.0609*${Vol})
+variable        Wzz atom -c_s[3]/(23.0609*${Vol})
+variable        Wxy atom -c_s[4]/(23.0609*${Vol})
+variable        Wxz atom -c_s[5]/(23.0609*${Vol})
+variable        Wyz atom -c_s[6]/(23.0609*${Vol})
+
+
+# 输出到文件：每原子的 6 分量位力，单位 eV
+dump            v_all all custom 1 virialbond.dump id type v_Wxx v_Wyy v_Wzz v_Wxy v_Wxz v_Wyz
+dump_modify v_all sort id
+dump_modify v_all format float %14.6f
+dump_modify v_all format int %8d
+
+timestep    0
+fix         nve_bond all nve
+run         0
+unfix       nve_bond
+undump      dump_bond
+uncompute   f_bond
+
+# ---------------- Angle-only ----------------
+clear
+units       real
+atom_style  full
+
+bond_style      zero nocoeff
+angle_style     harmonic
+dihedral_style  zero nocoeff
+pair_style      zero 10.0 nocoeff
+
+read_data   eqoptedsort.data
+
+thermo      1
+thermo_style custom step etotal ebond eangle edihed evdwl ecoul  press pxx pyy pzz pxy pxz pyz
+
+compute     f_angle all property/atom fx fy fz
+variable        Fx atom c_f_angle[1]/(23.0609)
+variable        Fy atom c_f_angle[2]/(23.0609)
+variable        Fz atom c_f_angle[3]/(23.0609)
+
+
+dump        dump_angle all custom 1 angleforce.log id type x y z v_Fx v_Fy v_Fz
+
+dump_modify dump_angle sort id
+dump_modify dump_angle format float %14.6f
+dump_modify dump_angle format int %8d
+
+# 每原子位力（只取势能部分 virial，不含动能）
+compute         s all stress/atom NULL virial
+variable        Vol equal vol
+
+
+# 定义变量：去掉负号（stress/atom 是负的位力），并把 kcal/mol 转换为 eV
+variable        Wxx atom -c_s[1]/(23.0609*${Vol})
+variable        Wyy atom -c_s[2]/(23.0609*${Vol})
+variable        Wzz atom -c_s[3]/(23.0609*${Vol})
+variable        Wxy atom -c_s[4]/(23.0609*${Vol})
+variable        Wxz atom -c_s[5]/(23.0609*${Vol})
+variable        Wyz atom -c_s[6]/(23.0609*${Vol})
+
+
+# 输出到文件：每原子的 6 分量位力，单位 eV
+dump            v_all all custom 1 virialangle.dump id type v_Wxx v_Wyy v_Wzz v_Wxy v_Wxz v_Wyz
+dump_modify v_all sort id
+dump_modify v_all format float %14.6f
+dump_modify v_all format int %8d
+
+
+fix         nve_angle all nve
+run         0
+unfix       nve_angle
+undump      dump_angle
+uncompute   f_angle
+
+# ---------------- Dihedral-only ----------------
+clear
+units       real
+atom_style  full
+
+bond_style      zero nocoeff
+angle_style     zero nocoeff
+dihedral_style  opls
+pair_style      zero 10.0 nocoeff
+
+read_data   eqoptedsort.data
+
+compute     f_dihedral all property/atom fx fy fz
+variable        Fx atom c_f_dihedral[1]/(23.0609)
+variable        Fy atom c_f_dihedral[2]/(23.0609)
+variable        Fz atom c_f_dihedral[3]/(23.0609)
+
+
+dump        dump_dihedral all custom 1 dihedralforce.log id type x y z v_Fx v_Fy v_Fz
+
+dump_modify dump_dihedral sort id
+dump_modify dump_dihedral format float %14.6f
+dump_modify dump_dihedral format int %8d
+
+# 每原子位力（只取势能部分 virial，不含动能）
+compute         s all stress/atom NULL virial
+variable        Vol equal vol
+
+
+# 定义变量：去掉负号（stress/atom 是负的位力），并把 kcal/mol 转换为 eV
+variable        Wxx atom -c_s[1]/(23.0609*${Vol})
+variable        Wyy atom -c_s[2]/(23.0609*${Vol})
+variable        Wzz atom -c_s[3]/(23.0609*${Vol})
+variable        Wxy atom -c_s[4]/(23.0609*${Vol})
+variable        Wxz atom -c_s[5]/(23.0609*${Vol})
+variable        Wyz atom -c_s[6]/(23.0609*${Vol})
+
+
+# 输出到文件：每原子的 6 分量位力，单位 eV
+dump            v_all all custom 1 virialdihedral.dump id type v_Wxx v_Wyy v_Wzz v_Wxy v_Wxz v_Wyz
+dump_modify v_all sort id
+dump_modify v_all format float %14.6f
+dump_modify v_all format int %8d
+
+
+fix         nve_dihedral all nve
+run         0
+unfix       nve_dihedral
+undump      dump_dihedral
+uncompute   f_dihedral
+
+# ---------------- lj-only ----------------
+clear
+units       real
+atom_style  full
+
+bond_style      zero nocoeff
+angle_style     zero nocoeff
+dihedral_style  zero nocoeff
+pair_style      lj/cut 10.0
+
+read_data   eqoptedsort.data
+
+thermo      1
+thermo_style custom step etotal ebond eangle edihed evdwl ecoul  press pxx pyy pzz pxy pxz pyz
+
+special_bonds   lj 0.0 0.0 0.5 coul 0.0 0.0 0.5 angle yes dihedral yes
+
+compute     f_lj all property/atom fx fy fz
+variable        Fx atom c_f_lj[1]/(23.0609)
+variable        Fy atom c_f_lj[2]/(23.0609)
+variable        Fz atom c_f_lj[3]/(23.0609)
+
+
+dump        dump_lj all custom 1 ljforce.log id type x y z v_Fx v_Fy v_Fz
+
+dump_modify dump_lj sort id
+dump_modify dump_lj format float %14.6f
+dump_modify dump_lj format int %8d
+
+# 每原子位力（只取势能部分 virial，不含动能）
+compute         s all stress/atom NULL virial
+variable        Vol equal vol
+
+
+# 定义变量：去掉负号（stress/atom 是负的位力），并把 kcal/mol 转换为 eV
+variable        Wxx atom -c_s[1]/(23.0609*${Vol})
+variable        Wyy atom -c_s[2]/(23.0609*${Vol})
+variable        Wzz atom -c_s[3]/(23.0609*${Vol})
+variable        Wxy atom -c_s[4]/(23.0609*${Vol})
+variable        Wxz atom -c_s[5]/(23.0609*${Vol})
+variable        Wyz atom -c_s[6]/(23.0609*${Vol})
+
+
+# 输出到文件：每原子的 6 分量位力，单位 eV
+dump            v_all all custom 1 viriallj.dump id type v_Wxx v_Wyy v_Wzz v_Wxy v_Wxz v_Wyz
+dump_modify v_all sort id
+dump_modify v_all format float %14.6f
+dump_modify v_all format int %8d
+
+
+
+fix         nve_lj all nve
+run         0
+unfix       nve_lj
+undump      dump_lj
+uncompute   f_lj
+
+# ---------------- Pair-only ----------------
+clear
+units       real
+atom_style  full
+
+bond_style      zero nocoeff
+angle_style     zero nocoeff
+dihedral_style  zero nocoeff
+pair_style      lj/cut/coul/dsf 0.25 10.0
+
+read_data   eqoptedsort.data
+
+thermo      1
+thermo_style custom step etotal ebond eangle edihed evdwl ecoul  press pxx pyy pzz pxy pxz pyz
+
+special_bonds   lj 0.0 0.0 0.5 coul 0.0 0.0 0.5 angle yes dihedral yes
+
+compute     f_pair all property/atom fx fy fz
+variable        Fx atom c_f_pair[1]/(23.0609)
+variable        Fy atom c_f_pair[2]/(23.0609)
+variable        Fz atom c_f_pair[3]/(23.0609)
+
+
+dump        dump_pair all custom 1 pairforce.log id type x y z v_Fx v_Fy v_Fz
+
+dump_modify dump_pair sort id
+dump_modify dump_pair format float %14.6f
+dump_modify dump_pair format int %8d
+
+# 每原子位力（只取势能部分 virial，不含动能）
+compute         s all stress/atom NULL virial
+variable        Vol equal vol
+
+
+# 定义变量：去掉负号（stress/atom 是负的位力），并把 kcal/mol 转换为 eV
+variable        Wxx atom -c_s[1]/(23.0609*${Vol})
+variable        Wyy atom -c_s[2]/(23.0609*${Vol})
+variable        Wzz atom -c_s[3]/(23.0609*${Vol})
+variable        Wxy atom -c_s[4]/(23.0609*${Vol})
+variable        Wxz atom -c_s[5]/(23.0609*${Vol})
+variable        Wyz atom -c_s[6]/(23.0609*${Vol})
+
+
+# 输出到文件：每原子的 6 分量位力，单位 eV
+dump            v_all all custom 1 virialpair.dump id type v_Wxx v_Wyy v_Wzz v_Wxy v_Wxz v_Wyz
+dump_modify v_all sort id
+dump_modify v_all format float %14.6f
+dump_modify v_all format int %8d
+
+
+
+fix         nve_pair all nve
+run         0
+unfix       nve_pair
+undump      dump_pair
+uncompute   f_pair
+
+# ---------------- All interactions ----------------
+clear
+units       real
+atom_style  full
+
+bond_style      harmonic
+angle_style     harmonic
+dihedral_style  opls
+pair_style      lj/cut/coul/dsf 0.25 10.0
+
+read_data   eqoptedsort.data
+
+thermo      1
+thermo_style custom step etotal ebond eangle edihed evdwl ecoul  press pxx pyy pzz pxy pxz pyz
+
+special_bonds   lj 0.0 0.0 0.5 coul 0.0 0.0 0.5 angle yes dihedral yes
+
+# 输出原子力
+compute     f_all all property/atom fx fy fz
+variable        Fx atom c_f_all[1]/(23.0609)
+variable        Fy atom c_f_all[2]/(23.0609)
+variable        Fz atom c_f_all[3]/(23.0609)
+
+
+dump        dump_all all custom 1 bondforce.log id type x y z v_Fx v_Fy v_Fz
+
+dump_modify dump_all sort id
+dump_modify dump_all format float %14.6f
+dump_modify dump_all format int %8d
+
+# 每原子位力（只取势能部分 virial，不含动能）
+compute         s all stress/atom NULL virial
+variable        Vol equal vol
+
+
+# 定义变量：去掉负号（stress/atom 是负的位力），并把 kcal/mol 转换为 eV
+variable        Wxx atom -c_s[1]/(23.0609*${Vol})
+variable        Wyy atom -c_s[2]/(23.0609*${Vol})
+variable        Wzz atom -c_s[3]/(23.0609*${Vol})
+variable        Wxy atom -c_s[4]/(23.0609*${Vol})
+variable        Wxz atom -c_s[5]/(23.0609*${Vol})
+variable        Wyz atom -c_s[6]/(23.0609*${Vol})
+
+
+# 输出到文件：每原子的 6 分量位力，单位 eV
+dump            v_all all custom 1 virialall.dump id type v_Wxx v_Wyy v_Wzz v_Wxy v_Wxz v_Wyz
+dump_modify     v_all sort id
+dump_modify     v_all format float %14.6f
+dump_modify     v_all format int %8d
+
+fix         nve_all all nve
+run         0
