@@ -22,11 +22,14 @@ testlmpmod(){
 # 在当前目录下测试lmp模型
 testlmpdir(){
     lmpmodelfile=${1}
+    lmptemplate=${2:-300}  # 默认为300K
     lmpmodelfile_address=$PWD
     cp ~/.rebreath/inp_lib/Lammps/testall.inp .
-    sed -E -i '/^[[:space:]]*read_data/s/.*/read_data   '"${lsmdmodelfile}"'/' ~/.comparewithlmp/lmptest/testall.inp
+    sed -E -i '/^[[:space:]]*read_data/s/.*/read_data   '"${lsmdmodelfile}"'/' testall.inp
+    #velocity all create 300.0 12345 mom yes rot yes dist gaussian
+    sed -E -i '/^([[:space:]]*)velocity all create/s~.*~\1velocity all create '"${lmptemplate}"' 12345 mom yes rot yes dist gaussian~' testall.inp
     conda activate deepmd || true
-    mpirun -np 4 lmp -i testall.inp
+    mpirun -np 1 lmp -i testall.inp
     echo "${lmpmodelfile} has been tested."
 }
 
@@ -127,6 +130,7 @@ cdlmpdir(){
 testlsmdir(){
 
     lsmdmodelfile=${1}
+    lsmdtemplate=${2:-300}  # 默认为300K
     lsmdmodelfile_address=$PWD
 
     # 开启全部的opls力的计算
@@ -138,7 +142,7 @@ Potential         opls
 nobond_constant  0 0 0.5  10  0.25   
 opls_start    1 1 1 0 1    
 UnitStyle         real
-T_init            300
+T_init            ${lsmdtemplate}
 outvirial  1  virialall.txt   
 
 ensemble       NVE
@@ -181,6 +185,7 @@ EOF
     sed -E -i '/^opls_start/s/.*/opls_start    0 0 0 0 1/' md.inp
     sed -E -i '/^outvirial/s/.*/outvirial 1 virialpair.txt/' md.inp
     sed -E -i '/^writedata/s/.*/writedata   1   xyz   pairforce.xyz      /' md.inp
+    lsmd
 
     # 开启全部的opls力的计算
     sed -E -i '/^opls_start/s/.*/opls_start    1 1 1 0 1/' md.inp

@@ -1,3 +1,4 @@
+# 该脚本使用来与自研MD软件LSMD进行对比，可以输出OPLSaa势能各个组分的能量，力，压强，位力。
 # ---------------- Bond-only ----------------
 clear
 units       real
@@ -8,16 +9,16 @@ angle_style     zero nocoeff
 dihedral_style  zero nocoeff
 pair_style      zero 10.0 nocoeff
 
-read_data   eqoptedsortold.data
+read_data   eqoptedsort.data
 
 thermo      1
 thermo_style custom step etotal ebond eangle edihed evdwl ecoul  press pxx pyy pzz pxy pxz pyz  
 
 compute     f_bond all property/atom fx fy fz
 
-variable        Fx atom c_f_bond[1]/(23.060547830619)
-variable        Fy atom c_f_bond[2]/(23.060547830619)
-variable        Fz atom c_f_bond[3]/(23.060547830619)
+variable        Fx atom c_f_bond[1]/(23.0609)
+variable        Fy atom c_f_bond[2]/(23.0609)
+variable        Fz atom c_f_bond[3]/(23.0609)
 
 dump        dump_bond all custom 1 bondforce.log id type x y z v_Fx v_Fy v_Fz
 
@@ -31,12 +32,12 @@ variable        Vol equal vol
 
 
 # 定义变量：去掉负号（stress/atom 是负的位力），并把 kcal/mol 转换为 eV
-variable        Wxx atom -c_s[1]/(23.060547830619*${Vol})
-variable        Wyy atom -c_s[2]/(23.060547830619*${Vol})
-variable        Wzz atom -c_s[3]/(23.060547830619*${Vol})
-variable        Wxy atom -c_s[4]/(23.060547830619*${Vol})
-variable        Wxz atom -c_s[5]/(23.060547830619*${Vol})
-variable        Wyz atom -c_s[6]/(23.060547830619*${Vol})
+variable        Wxx atom -c_s[1]/(23.0609*${Vol})
+variable        Wyy atom -c_s[2]/(23.0609*${Vol})
+variable        Wzz atom -c_s[3]/(23.0609*${Vol})
+variable        Wxy atom -c_s[4]/(23.0609*${Vol})
+variable        Wxz atom -c_s[5]/(23.0609*${Vol})
+variable        Wyz atom -c_s[6]/(23.0609*${Vol})
 
 
 # 输出到文件：每原子的 6 分量位力，单位 eV
@@ -45,23 +46,12 @@ dump_modify v_all sort id
 dump_modify v_all format float %14.6f
 dump_modify v_all format int %8d
 
-variable pfile string pressure.log
-
-print "# Tag step press pxx pyy pzz pxy pxz pyz" file ${pfile} screen no
-
-fix pr all print 1 "bond $(step) $(press) $(pxx) $(pyy) $(pzz) $(pxy) $(pxz) $(pyz)" append ${pfile} screen no
-
 timestep    0
-velocity all create 300.0 12345 mom yes rot yes dist gaussian
 fix         nve_bond all nve
 run         0
 unfix       nve_bond
-#unfix       pr
 undump      dump_bond
-undump      v_all
 uncompute   f_bond
-uncompute   s
-
 
 # ---------------- Angle-only ----------------
 clear
@@ -73,15 +63,15 @@ angle_style     harmonic
 dihedral_style  zero nocoeff
 pair_style      zero 10.0 nocoeff
 
-read_data    eqoptedsortold.data
+read_data   eqoptedsort.data
 
 thermo      1
 thermo_style custom step etotal ebond eangle edihed evdwl ecoul  press pxx pyy pzz pxy pxz pyz
 
 compute     f_angle all property/atom fx fy fz
-variable        Fx atom c_f_angle[1]/(23.060547830619)
-variable        Fy atom c_f_angle[2]/(23.060547830619)
-variable        Fz atom c_f_angle[3]/(23.060547830619)
+variable        Fx atom c_f_angle[1]/(23.0609)
+variable        Fy atom c_f_angle[2]/(23.0609)
+variable        Fz atom c_f_angle[3]/(23.0609)
 
 
 dump        dump_angle all custom 1 angleforce.log id type x y z v_Fx v_Fy v_Fz
@@ -96,12 +86,12 @@ variable        Vol equal vol
 
 
 # 定义变量：去掉负号（stress/atom 是负的位力），并把 kcal/mol 转换为 eV
-variable        Wxx atom -c_s[1]/(23.060547830619*${Vol})
-variable        Wyy atom -c_s[2]/(23.060547830619*${Vol})
-variable        Wzz atom -c_s[3]/(23.060547830619*${Vol})
-variable        Wxy atom -c_s[4]/(23.060547830619*${Vol})
-variable        Wxz atom -c_s[5]/(23.060547830619*${Vol})
-variable        Wyz atom -c_s[6]/(23.060547830619*${Vol})
+variable        Wxx atom -c_s[1]/(23.0609*${Vol})
+variable        Wyy atom -c_s[2]/(23.0609*${Vol})
+variable        Wzz atom -c_s[3]/(23.0609*${Vol})
+variable        Wxy atom -c_s[4]/(23.0609*${Vol})
+variable        Wxz atom -c_s[5]/(23.0609*${Vol})
+variable        Wyz atom -c_s[6]/(23.0609*${Vol})
 
 
 # 输出到文件：每原子的 6 分量位力，单位 eV
@@ -111,10 +101,6 @@ dump_modify v_all format float %14.6f
 dump_modify v_all format int %8d
 
 
-
-fix pr all print 1 "angle $(step) $(press) $(pxx) $(pyy) $(pzz) $(pxy) $(pxz) $(pyz)" append pressure.log screen no
-
-velocity all create 300.0 12345 mom yes rot yes dist gaussian
 fix         nve_angle all nve
 run         0
 unfix       nve_angle
@@ -131,12 +117,12 @@ angle_style     zero nocoeff
 dihedral_style  opls
 pair_style      zero 10.0 nocoeff
 
-read_data    eqoptedsortold.data
+read_data   eqoptedsort.data
 
 compute     f_dihedral all property/atom fx fy fz
-variable        Fx atom c_f_dihedral[1]/(23.060547830619)
-variable        Fy atom c_f_dihedral[2]/(23.060547830619)
-variable        Fz atom c_f_dihedral[3]/(23.060547830619)
+variable        Fx atom c_f_dihedral[1]/(23.0609)
+variable        Fy atom c_f_dihedral[2]/(23.0609)
+variable        Fz atom c_f_dihedral[3]/(23.0609)
 
 
 dump        dump_dihedral all custom 1 dihedralforce.log id type x y z v_Fx v_Fy v_Fz
@@ -151,12 +137,12 @@ variable        Vol equal vol
 
 
 # 定义变量：去掉负号（stress/atom 是负的位力），并把 kcal/mol 转换为 eV
-variable        Wxx atom -c_s[1]/(23.060547830619*${Vol})
-variable        Wyy atom -c_s[2]/(23.060547830619*${Vol})
-variable        Wzz atom -c_s[3]/(23.060547830619*${Vol})
-variable        Wxy atom -c_s[4]/(23.060547830619*${Vol})
-variable        Wxz atom -c_s[5]/(23.060547830619*${Vol})
-variable        Wyz atom -c_s[6]/(23.060547830619*${Vol})
+variable        Wxx atom -c_s[1]/(23.0609*${Vol})
+variable        Wyy atom -c_s[2]/(23.0609*${Vol})
+variable        Wzz atom -c_s[3]/(23.0609*${Vol})
+variable        Wxy atom -c_s[4]/(23.0609*${Vol})
+variable        Wxz atom -c_s[5]/(23.0609*${Vol})
+variable        Wyz atom -c_s[6]/(23.0609*${Vol})
 
 
 # 输出到文件：每原子的 6 分量位力，单位 eV
@@ -166,9 +152,6 @@ dump_modify v_all format float %14.6f
 dump_modify v_all format int %8d
 
 
-fix pr all print 1 "dihedral $(step) $(press) $(pxx) $(pyy) $(pzz) $(pxy) $(pxz) $(pyz)" append pressure.log screen no
-
-velocity all create 300.0 12345 mom yes rot yes dist gaussian
 fix         nve_dihedral all nve
 run         0
 unfix       nve_dihedral
@@ -185,7 +168,7 @@ angle_style     zero nocoeff
 dihedral_style  zero nocoeff
 pair_style      lj/cut 10.0
 
-read_data    eqoptedsortold.data
+read_data   eqoptedsort.data
 
 thermo      1
 thermo_style custom step etotal ebond eangle edihed evdwl ecoul  press pxx pyy pzz pxy pxz pyz
@@ -193,9 +176,9 @@ thermo_style custom step etotal ebond eangle edihed evdwl ecoul  press pxx pyy p
 special_bonds   lj 0.0 0.0 0.5 coul 0.0 0.0 0.5 angle yes dihedral yes
 
 compute     f_lj all property/atom fx fy fz
-variable        Fx atom c_f_lj[1]/(23.060547830619)
-variable        Fy atom c_f_lj[2]/(23.060547830619)
-variable        Fz atom c_f_lj[3]/(23.060547830619)
+variable        Fx atom c_f_lj[1]/(23.0609)
+variable        Fy atom c_f_lj[2]/(23.0609)
+variable        Fz atom c_f_lj[3]/(23.0609)
 
 
 dump        dump_lj all custom 1 ljforce.log id type x y z v_Fx v_Fy v_Fz
@@ -210,12 +193,12 @@ variable        Vol equal vol
 
 
 # 定义变量：去掉负号（stress/atom 是负的位力），并把 kcal/mol 转换为 eV
-variable        Wxx atom -c_s[1]/(23.060547830619*${Vol})
-variable        Wyy atom -c_s[2]/(23.060547830619*${Vol})
-variable        Wzz atom -c_s[3]/(23.060547830619*${Vol})
-variable        Wxy atom -c_s[4]/(23.060547830619*${Vol})
-variable        Wxz atom -c_s[5]/(23.060547830619*${Vol})
-variable        Wyz atom -c_s[6]/(23.060547830619*${Vol})
+variable        Wxx atom -c_s[1]/(23.0609*${Vol})
+variable        Wyy atom -c_s[2]/(23.0609*${Vol})
+variable        Wzz atom -c_s[3]/(23.0609*${Vol})
+variable        Wxy atom -c_s[4]/(23.0609*${Vol})
+variable        Wxz atom -c_s[5]/(23.0609*${Vol})
+variable        Wyz atom -c_s[6]/(23.0609*${Vol})
 
 
 # 输出到文件：每原子的 6 分量位力，单位 eV
@@ -225,10 +208,7 @@ dump_modify v_all format float %14.6f
 dump_modify v_all format int %8d
 
 
-fix pr all print 1 "LJ $(step) $(press) $(pxx) $(pyy) $(pzz) $(pxy) $(pxz) $(pyz)" append pressure.log screen no
 
-
-velocity all create 300.0 12345 mom yes rot yes dist gaussian
 fix         nve_lj all nve
 run         0
 unfix       nve_lj
@@ -245,7 +225,7 @@ angle_style     zero nocoeff
 dihedral_style  zero nocoeff
 pair_style      lj/cut/coul/dsf 0.25 10.0
 
-read_data    eqoptedsortold.data
+read_data   eqoptedsort.data
 
 thermo      1
 thermo_style custom step etotal ebond eangle edihed evdwl ecoul  press pxx pyy pzz pxy pxz pyz
@@ -253,9 +233,9 @@ thermo_style custom step etotal ebond eangle edihed evdwl ecoul  press pxx pyy p
 special_bonds   lj 0.0 0.0 0.5 coul 0.0 0.0 0.5 angle yes dihedral yes
 
 compute     f_pair all property/atom fx fy fz
-variable        Fx atom c_f_pair[1]/(23.060547830619)
-variable        Fy atom c_f_pair[2]/(23.060547830619)
-variable        Fz atom c_f_pair[3]/(23.060547830619)
+variable        Fx atom c_f_pair[1]/(23.0609)
+variable        Fy atom c_f_pair[2]/(23.0609)
+variable        Fz atom c_f_pair[3]/(23.0609)
 
 
 dump        dump_pair all custom 1 pairforce.log id type x y z v_Fx v_Fy v_Fz
@@ -270,12 +250,12 @@ variable        Vol equal vol
 
 
 # 定义变量：去掉负号（stress/atom 是负的位力），并把 kcal/mol 转换为 eV
-variable        Wxx atom -c_s[1]/(23.060547830619*${Vol})
-variable        Wyy atom -c_s[2]/(23.060547830619*${Vol})
-variable        Wzz atom -c_s[3]/(23.060547830619*${Vol})
-variable        Wxy atom -c_s[4]/(23.060547830619*${Vol})
-variable        Wxz atom -c_s[5]/(23.060547830619*${Vol})
-variable        Wyz atom -c_s[6]/(23.060547830619*${Vol})
+variable        Wxx atom -c_s[1]/(23.0609*${Vol})
+variable        Wyy atom -c_s[2]/(23.0609*${Vol})
+variable        Wzz atom -c_s[3]/(23.0609*${Vol})
+variable        Wxy atom -c_s[4]/(23.0609*${Vol})
+variable        Wxz atom -c_s[5]/(23.0609*${Vol})
+variable        Wyz atom -c_s[6]/(23.0609*${Vol})
 
 
 # 输出到文件：每原子的 6 分量位力，单位 eV
@@ -285,10 +265,7 @@ dump_modify v_all format float %14.6f
 dump_modify v_all format int %8d
 
 
-fix pr all print 1 "pair $(step) $(press) $(pxx) $(pyy) $(pzz) $(pxy) $(pxz) $(pyz)" append pressure.log screen no
 
-
-velocity all create 300.0 12345 mom yes rot yes dist gaussian
 fix         nve_pair all nve
 run         0
 unfix       nve_pair
@@ -305,7 +282,7 @@ angle_style     harmonic
 dihedral_style  opls
 pair_style      lj/cut/coul/dsf 0.25 10.0
 
-read_data   eqoptedsortold.data
+read_data   eqoptedsort.data
 
 thermo      1
 thermo_style custom step etotal ebond eangle edihed evdwl ecoul  press pxx pyy pzz pxy pxz pyz
@@ -314,12 +291,12 @@ special_bonds   lj 0.0 0.0 0.5 coul 0.0 0.0 0.5 angle yes dihedral yes
 
 # 输出原子力
 compute     f_all all property/atom fx fy fz
-variable        Fx atom c_f_all[1]/(23.060547830619)
-variable        Fy atom c_f_all[2]/(23.060547830619)
-variable        Fz atom c_f_all[3]/(23.060547830619)
+variable        Fx atom c_f_all[1]/(23.0609)
+variable        Fy atom c_f_all[2]/(23.0609)
+variable        Fz atom c_f_all[3]/(23.0609)
 
 
-dump        dump_all all custom 1 allforce.log id type x y z v_Fx v_Fy v_Fz
+dump        dump_all all custom 1 bondforce.log id type x y z v_Fx v_Fy v_Fz
 
 dump_modify dump_all sort id
 dump_modify dump_all format float %14.6f
@@ -331,12 +308,12 @@ variable        Vol equal vol
 
 
 # 定义变量：去掉负号（stress/atom 是负的位力），并把 kcal/mol 转换为 eV
-variable        Wxx atom -c_s[1]/(23.060547830619*${Vol})
-variable        Wyy atom -c_s[2]/(23.060547830619*${Vol})
-variable        Wzz atom -c_s[3]/(23.060547830619*${Vol})
-variable        Wxy atom -c_s[4]/(23.060547830619*${Vol})
-variable        Wxz atom -c_s[5]/(23.060547830619*${Vol})
-variable        Wyz atom -c_s[6]/(23.060547830619*${Vol})
+variable        Wxx atom -c_s[1]/(23.0609*${Vol})
+variable        Wyy atom -c_s[2]/(23.0609*${Vol})
+variable        Wzz atom -c_s[3]/(23.0609*${Vol})
+variable        Wxy atom -c_s[4]/(23.0609*${Vol})
+variable        Wxz atom -c_s[5]/(23.0609*${Vol})
+variable        Wyz atom -c_s[6]/(23.0609*${Vol})
 
 
 # 输出到文件：每原子的 6 分量位力，单位 eV
@@ -345,44 +322,5 @@ dump_modify     v_all sort id
 dump_modify     v_all format float %14.6f
 dump_modify     v_all format int %8d
 
-
-fix pr all print 1 "all $(step) $(press) $(pxx) $(pyy) $(pzz) $(pxy) $(pxz) $(pyz)" append pressure.log screen no
-
-velocity all create 300.0 12345 mom yes rot yes dist gaussian
 fix         nve_all all nve
 run         0
-
-
-
-# --------- generate python formatter script ----------
-shell rm -f formatize.py
-
-print "from pathlib import Path" file formatize.py screen no
-print "f = Path('pressure.log')" append formatize.py screen no
-print "if not f.exists(): raise SystemExit('pressure.log not found')" append formatize.py screen no
-print "lines = f.read_text(encoding='utf-8', errors='ignore').splitlines()" append formatize.py screen no
-print "if len(lines) >= 2: lines.pop(1)  # delete 2nd line" append formatize.py screen no
-print "lines = [ln for ln in lines if ln.strip()]" append formatize.py screen no
-print "if not lines: raise SystemExit('pressure.log empty after cleanup')" append formatize.py screen no
-print "header = lines[0].lstrip('#').strip()  # remove leading # in header" append formatize.py screen no
-print "cols = header.split(); n = len(cols)" append formatize.py screen no
-print "data = []" append formatize.py screen no
-print "for ln in lines[1:]:" append formatize.py screen no
-print "    s = ln.strip()" append formatize.py screen no
-print "    if (not s) or s.startswith('#'): continue" append formatize.py screen no
-print "    p = s.split()" append formatize.py screen no
-print "    if len(p) >= n: data.append(p[:n])" append formatize.py screen no
-
-print "w_tag, w_step, w_num, dec = 10, 5, 12, 5" append formatize.py screen no
-print "fmt_h = ('{:<%d} {:>%d} ' % (w_tag, w_step)) + ' '.join(['{:>%d}' % w_num] * (n-2))" append formatize.py screen no
-print "fmt_d = ('{:<%d} {:>%dd} ' % (w_tag, w_step)) + ' '.join(['{:>%d.%df}' % (w_num, dec)] * (n-2))" append formatize.py screen no
-print "out = [fmt_h.format(*cols)]" append formatize.py screen no
-print "for r in data:" append formatize.py screen no
-print "    tag = r[0]; step = int(float(r[1])); nums = [float(x) for x in r[2:]]" append formatize.py screen no
-print "    out.append(fmt_d.format(tag, step, *nums))" append formatize.py screen no
-print "f.write_text('\n'.join(out) + '\n', encoding='utf-8')" append formatize.py screen no
-
-# --------- run it ----------
-shell python3 formatize.py
-
-shell rm -f formatize.py

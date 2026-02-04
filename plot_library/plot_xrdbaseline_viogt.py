@@ -37,7 +37,7 @@ mask_cut = (x_init >= 10) & (x_init <= 60)
 x_init = x_init[mask_cut]
 y_init = y_init[mask_cut]
 
-def find_peak_region(x, y, target_pos, search_window=8):
+def find_peak_region(x, y, target_pos, search_window=12):
     """
     自动查找完整峰形范围（基于峰宽）。
     
@@ -53,17 +53,21 @@ def find_peak_region(x, y, target_pos, search_window=8):
     # 1. 在目标位置附近截取数据
     mask = (x >= target_pos - search_window) & (x <= target_pos + search_window)
     x_sub, y_sub = x[mask], y[mask]
+    print(f"查找范围: {target_pos - search_window:.2f}° 到 {target_pos + search_window:.2f}°")
     
     # 2. 找峰
-    peaks, _ = find_peaks(y_sub, prominence=10)
+    peaks, _ = find_peaks(y_sub, prominence=1)
+
     if len(peaks) == 0:
         return None
     
     # 3. 找到最接近 target_pos 的峰
-    peak_idx_sub = peaks[np.argmin(np.abs(x_sub[peaks] - target_pos))]
+    # peak_idx_sub = peaks[np.argmin(np.abs(x_sub[peaks] - target_pos))]
+    # 找到峰值最高的峰
+    peak_idx_sub = peaks[np.argmax(y_sub[peaks])]
     
     # 4. 计算峰宽（半高宽）
-    results_half = peak_widths(y_sub, [peak_idx_sub], rel_height=0.98)
+    results_half = peak_widths(y_sub, [peak_idx_sub], rel_height=1)
     left_idx_sub  = int(results_half[2][0])   # 子数组中的左索引
     right_idx_sub = int(results_half[3][0])   # 子数组中的右索引
     
@@ -74,7 +78,6 @@ def find_peak_region(x, y, target_pos, search_window=8):
     
     return left_idx, right_idx
 
-
 def find_002_peak(x, y):
     """查找002峰完整范围"""
     return find_peak_region(x, y, target_pos=26.5, search_window=8)
@@ -82,7 +85,7 @@ def find_002_peak(x, y):
 
 def find_100_peak(x, y):
     """查找100峰完整范围"""
-    return find_peak_region(x, y, target_pos=42.0, search_window=8)
+    return find_peak_region(x, y, target_pos=43.0, search_window=8)
 
 
 def find_noise_region(x, y, step=50):
@@ -121,13 +124,11 @@ def extract_dominant_peak(x, y, start_idx, end_idx, min_peak_prominence=0.1):
     x_region = x[start_idx:end_idx]
     y_region = y[start_idx:end_idx]
     
-    from scipy.signal import find_peaks
-    
     # 1. 找到所有峰
     peaks_idx, properties = find_peaks(
         y_region, 
         prominence=min_peak_prominence,
-        distance=10  # 最小峰间距，避免噪声
+        distance=5  # 最小峰间距，避免噪声
     )
     
     if len(peaks_idx) == 0:
@@ -184,7 +185,7 @@ def extract_dominant_peak(x, y, start_idx, end_idx, min_peak_prominence=0.1):
 # 自动查找最优 lam 值
 # -----------------------------
 def find_optimal_lam(baseline_fitter, y_init, x_init, p=0.002,
-                     lam_start=1e3, lam_factor=10, tol=0.1, lam_max=1e9):
+                     lam_start=1e3, lam_factor=10, tol=0.3, lam_max=1e9):
     """
     自动查找合适的 lam 值，用峰高保持和 SNR 判据。
     
@@ -249,11 +250,8 @@ baseline_fitter = Baseline(x_data=x_init)
 lam_opt, ycorrect, bkg = find_optimal_lam(baseline_fitter, y_init, x_init)
 print(f"optimum fit lambda: {lam_opt:.0e}")
 
-
-mask_cut = (x_init >= 0) & (x_init <= 180)
-x = x_init[mask_cut]
-y = ycorrect[mask_cut]
-
+x = x_init
+y = ycorrect
 
 # -----------------------------
 # 1. 找 002 峰（18–32°）
@@ -384,7 +382,7 @@ peaks_002 = extract_dominant_peak(x, y, peaks_002[0], peaks_002[1])
 popt_002, success ,r2_002 = fit_peak_with_initial_guess(x, y, peaks_002)
 
 if success:
-    # plt.plot(x[peaks_002[0]:peaks_002[1]], y[peaks_002[0]:peaks_002[1]], label='002 Peak init')
+    #plt.plot(x[peaks_002[0]:peaks_002[1]], y[peaks_002[0]:peaks_002[1]], label='002 Peak init', alpha=0.7, color='#9546CA')
     p002fit_y = pseudo_voigt(x[peaks_002[0]:peaks_002[1]], *popt_002)
     # plt.plot(x[peaks_002[0]:peaks_002[1]], 
     #          p002fit_y, 
@@ -419,7 +417,7 @@ if success:
 
 print(f"\n====================>拟合 100 峰...")
 peaks_100 = find_100_peak(x, y)
-
+print(peaks_100)
 peaks_100 = extract_dominant_peak(x, y, peaks_100[0], peaks_100[1])
 
 # 使用提取的主峰进行拟合
@@ -516,10 +514,10 @@ with open("xrd_info.txt", "w") as f:
     f.write(outinfo_txt)
 
 peak_color = ['#FF4070', '#3783F5', '#109B9E']
-low_y = -2
+low_y = -1.2
 
-p002 = find_002_peak(x, y)
-p100 = find_100_peak(x, y)
+p002 = peaks_002
+p100 = peaks_100
 noise = find_noise_region(x, y)
 
 plt.plot([x[p002[0]], x[p002[1]]], [0, 0], color=peak_color[0], linestyle='--' , alpha=0.5, linewidth=2)
@@ -538,20 +536,21 @@ x_mid_noise = (x[noise[0]] + x[noise[1]]) / 2
 plt.text(x_mid_noise, low_y, "Noise Region", color=peak_color[2],
          ha='center', va='top', fontsize=10)
 
-
-
 ax.text(0.82, 0.95, info_txt, transform=ax.transAxes,fontweight='bold',
         fontsize=12, verticalalignment='top',color='#5878F8FF',linespacing=1.5, 
         bbox=dict(boxstyle="round,pad=0.4",
                   facecolor='#FAFCBEFF', alpha=0.85,
                   edgecolor='0.5'))
 
+# 计算 bottom 位置
+y_bottom = min(plt.ylim()[0],-3)
+
 # 6. 坐标轴 & 标题 -------------------------------------------------------------
 ax.set_xlabel(r"2$\mathbf{\theta}$ (deg)", fontsize=15,fontweight='bold')
 ax.set_ylabel("Intensity (a.u.)", fontsize=15,fontweight='bold')
 ax.set_title("XRD Pattern of Carbon Fiber", fontsize=17, fontweight='bold', pad=15)
 ax.set_xlim(10, 60)
-#ax.set_ylim(0,100)
+ax.set_ylim(bottom=y_bottom)
 
 # 7. 细节 ----------------------------------------------------------------------
 ax.tick_params(axis='both', labelsize=12)
@@ -559,7 +558,7 @@ fig.tight_layout()
 ax.xaxis.grid(True, which='major', linestyle='-', linewidth=1.5, color='#0B5D56FF',alpha=0.25)
 ax.yaxis.grid(False)          # 确保 y 轴网格不出现
 ax.legend(fontsize=12, loc='upper left')
-fig.savefig("xrd_baseline_viogt.png", dpi=400, bbox_inches='tight')
+fig.savefig("xrd.png", dpi=400, bbox_inches='tight')
 
 
 print(f"\n====================>分析完毕 -.O")

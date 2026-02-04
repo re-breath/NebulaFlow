@@ -80,5 +80,5 @@ plt.tight_layout()
 plt.savefig("stress_strain_curve_bigfont.png", dpi=300)
 # plt.show()
 
-print(f"Young's Modulus: {youngs_modulus:.2f} GPa")
-print(f"Tensile Strength: {tensile_strength:.2f} GPa")
+print(f"Young's Modulus: {youngs_modulus:.6f} GPa")
+print(f"Tensile Strength: {tensile_strength:.6f} GPa")
