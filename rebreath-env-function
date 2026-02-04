@@ -80,6 +80,11 @@ proxy_download() {
     echo "文件已成功下载到本地并清理了临时文件夹。"
 }
 
+# 检查是否有正在运行的nohup任务
+find_nohup_task(){
+    string="$1"
+    ps aux | grep -E "($string)" | grep -v grep
+}
 
 free_time_run() {
 # 监测到空闲的gpu后进行任务
