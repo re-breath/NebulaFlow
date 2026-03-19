@@ -10,7 +10,7 @@ mkdir  -p average_hnemd/shc
 function granularity(){
     local m=0
     file_column=0
-    for i in $(find $init_address -maxdepth 1 -type d -regex  ".*hnemd[\._]?[0-9]+" | sort -t '_' -k 2 -n);do
+    for i in $(find $init_address -maxdepth 1 -mindepth 1 -type d -regex  ".*hnemd[\._]?[0-9]+" | sort -t '_' -k 2 -n);do
         basei=$(basename $i)
         file_column=$(awk '{print NF}' $i/kappa.out)
         add_name=$(grep -oE '[0-9]+' <<< $basei | tail -n 1)

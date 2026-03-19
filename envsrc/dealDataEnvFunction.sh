@@ -129,50 +129,6 @@ write('cutting_surface.xyz',s1, format='extxyz')
 EOF
 }
 
-#调用ovito转换文件的格式
-xyz_to_poscar() {
-    python3 -c "from ovito.io import import_file, export_file; pipeline = import_file('$1'); export_file(pipeline, 'POSCAR_convered', 'vasp')"
-}
-
-xyz_to_pos() {
-    python3 << EOF
-import ase.io
-filename = '$1'
-xyzinfo = ase.io.read(filename)
-ase.io.write('POSCAR_convered', xyzinfo, format='vasp')
-EOF
-}
-
-poscar_to_xyz() {     
-       	python3 -c "from ovito.io import import_file, export_file; pipeline = import_file('$1'); export_file(pipeline, 'model_conversed.xyz', 'xyz',columns=['Particle Type', 'Position.X', 'Position.Y', 'Position.Z'])"
-}
-
-data_to_xyz(){
-    python3 -c "from ovito.io import import_file, export_file; pipeline = import_file('$1'); export_file(pipeline, 'model_conversed.xyz', 'xyz',columns=['Particle Type', 'Position.X', 'Position.Y', 'Position.Z'])"
-}
-
-xyz_to_pdb(){
-    python3 << EOF
-import ase.io
-filename = '$1'
-xyzinfo = ase.io.read(filename)
-ase.io.write('convered.pdb', xyzinfo)
-EOF
-}
-
-data_to_pdb(){
-    data_to_xyz $1
-    xyz_to_pdb model_conversed.xyz
-}
-
-pos_to_xyz(){
-    python3 << EOF
-import ase.io
-filename = '$1'
-xyzinfo = ase.io.read(filename)
-ase.io.write('model_conversed.xyz', xyzinfo, format='xyz')
-EOF
-}
 
 
 get_grain_count(){
@@ -272,7 +228,7 @@ print('标准差:',np.std(data))
 EOF
 }
 
-xyz_to_cssr() {
+tran_xyz2cssr() {
 # 内嵌的Python脚本
     python3 - "$1" "$2" << 'EOF'
 from ase.io import read, write
@@ -298,23 +254,7 @@ if __name__ == '__main__':
 EOF
 }
 
-xyz_to_cif (){ 
-    #其实不只是xyz到cif，很多其他的格式也可以到达cif的格式，ase，让我看看你的实力了
-    #不过注意xyz文件如果想要使用ovito来进行转化的时候需要注意，最好只输出xyz方向的坐标，多了其他的东西可能会无法识别。
-    cifname={2:-'file.cif'}
-    python3  <<'EOF'
-from ase.io import read, write
 
-def convert(file_in, file_out):
-    # 读取XYZ文件
-    atoms = read(file_in)
-    # 输出为CIF文件
-    write(file_out, atoms)
-infile = '$1'
-outfile = '$cifname
-convert(infile, outfile)
-EOF
-}
 
 select_xyz_config(){
 #选择xyz文件中的某一构型(默认选择最后一个构型)，并输出到一个新的xyz文件中
@@ -465,106 +405,99 @@ grouping_to_xyz(){
 calc_cf_spatoms(){
 # 该函数用来计算碳纤维的杂化原子类型,并计算出结晶率
 # 使用方式为 calc_cf_spatoms train.xyz
+# 该函数弃用
     python3 ~/.rebreath/deal_data/compute_carbon_fiber_spatoms.py "$@"
 }
 
-plot_crysralinity_fraction(){
-# 本脚本的功能为对dump.xyz文件的每一帧进行晶型分析，分析其蜂窝状的原子的个数并画出图形进行可视化
-# 输入参数为dump.xyz文件名，以及晶型类型，如plot_crysralinity_fraction FCC dump.xyz 
-# 能处理的晶型有：OTHER FCC HCP BCC ICO SC CUBIC_DIAMOND HEX_DIAMOND GRAPHENE
-    crystal_type="OTHER FCC HCP BCC ICO SC CUBIC_DIAMOND HEX_DIAMOND GRAPHENE"
-    # 输入的晶型
-    itype=$1
-    argfile=$2
-    rmse_cutoff=${3:-'0.1'}
-    
-    echo "Analyzing Crystal Type: $itype_upper"
-    echo "Rmse Cutoff = $rmse_cutoff"
-    echo "Reading File: $argfile"
-    # 将 itype 转换为大写
-    itype_upper=$(echo "$itype" | tr '[:lower:]' '[:upper:]')
+analyze_crystallinity_fraction() {
+    # 用法:
+    # plot_crystallinity_fraction FCC dump.xyz [rmse_cutoff]
 
-    # 检查 itype_upper 是否在 crystal_type 列表中
-    if [[ ! $crystal_type =~ (^|[[:space:]])"$itype_upper"($|[[:space:]]) ]]; then
-        echo "Error: $itype_upper is not a valid crystal type."
-        echo "Valid crystal types are: $crystal_type"
+    local crystal_type_list="OTHER FCC HCP BCC ICO SC CUBIC_DIAMOND HEX_DIAMOND GRAPHENE"
+    local itype="$1"
+    local argfile="$2"
+    local rmse_cutoff="${3:-0.1}"
+
+    if [[ -z "$itype" || -z "$argfile" ]]; then
+        echo "Usage: plot_crystallinity_fraction <CRYSTAL_TYPE> <dump.xyz> [rmse_cutoff]"
         return 1
     fi
 
-python3 << EOF
-import matplotlib.pyplot as plt
+    local itype_upper
+    itype_upper=$(echo "$itype" | tr '[:lower:]' '[:upper:]')
+
+    echo "Analyzing Crystal Type: $itype_upper"
+    echo "Rmse Cutoff = $rmse_cutoff"
+    echo "Reading File: $argfile"
+
+    if [[ ! $crystal_type_list =~ (^|[[:space:]])"$itype_upper"($|[[:space:]]) ]]; then
+        echo "Error: $itype_upper is not a valid crystal type."
+        echo "Valid crystal types are: $crystal_type_list"
+        return 1
+    fi
+
+    python3 << EOF
 import matplotlib
+matplotlib.use('Agg')
+
+import matplotlib.pyplot as plt
 import numpy as np
 from ovito.io import import_file
 from ovito.modifiers import PolyhedralTemplateMatchingModifier
-from ovito.data import *
 
-crystal_type = '$itype_upper'
-# 设置matplotlib不显示图形界面
-matplotlib.use('Agg')
-def export_plot_data(listx,listy,filename:str):
-    #该函数接受列表x与列表y，将列表x与列表y写入文件第一列与第二列
-    listx = [int(x) for x in listx]
-    listy = [int(y) for y in listy]
-    date = np.column_stack((listx,listy))
-    #print(date)
-    np.savetxt(filename,date,delimiter=' ')
-    print('数据已保存至',filename)
+crystal_type = "${itype_upper}"
+file_pattern = "${argfile}"
+rmse_cutoff = float("${rmse_cutoff}")
 
-def plot_graphene_counts(file_pattern, color, label):
-    #计算并绘制每个文件的石墨烯原子计数
+def export_plot_data(listx, listy, filename: str):
+    data = np.column_stack((listx, listy))
+    np.savetxt(filename, data, fmt=['%d', '%.6f'], delimiter=' ')
+    print("数据已保存至", filename)
+
+def plot_crystal_fraction(file_pattern, color, label):
     pipeline = import_file(file_pattern, multiple_frames=True)
 
     counts = [pipeline.compute(i).particles.count for i in range(pipeline.source.num_frames)]
-
-    # 判定是否一致
     if len(set(counts)) != 1:
-        raise ValueError(f"原子数不一致: {counts}")
-    else:
-        total_atoms = counts[0]
+        raise ValueError(f"不同帧的原子总数不一致，唯一值为: {sorted(set(counts))}")
+    total_atoms = counts[0]
 
     ptm_modifier = PolyhedralTemplateMatchingModifier()
-    ptm_modifier.rmsd_cutoff = float($rmse_cutoff)
-    ptm_modifier.structures[PolyhedralTemplateMatchingModifier.Type.$itype_upper].enabled = True
+    ptm_modifier.rmsd_cutoff = rmse_cutoff
+    ptm_modifier.structures[getattr(PolyhedralTemplateMatchingModifier.Type, crystal_type)].enabled = True
     pipeline.modifiers.append(ptm_modifier)
 
-    graphene_counts = []
+    crystal_counts = []
     frames = []
+
+    attr_name = f'PolyhedralTemplateMatching.counts.{crystal_type}'
 
     for frame_index in range(pipeline.source.num_frames):
         data = pipeline.compute(frame_index)
         frames.append(frame_index)
-        graphene_counts.append(data.attributes['PolyhedralTemplateMatching.counts.$itype_upper'])
+        crystal_counts.append(data.attributes.get(attr_name, 0))
 
-    graphene_fraction = [count / total_atoms for count in graphene_counts]
+    crystal_fraction = [count / total_atoms for count in crystal_counts]
 
-    export_plot_data(frames, graphene_fraction, f"{label}.txt")
-    plt.plot(frames, graphene_fraction, 'o-', color=color, label=label,markersize=2)
-    
+    export_plot_data(frames, crystal_fraction, f"{label}.txt")
+    plt.plot(frames, crystal_fraction, 'o-', color=color, label=label, markersize=2)
 
-
-def setup_and_save_plot(file_list):
-    #设置图表并保存为PNG文件
+def setup_and_save_plot():
     plt.figure(figsize=(10, 5))
-    for file_data in file_list:
-        plot_graphene_counts(file_data['pattern'], file_data['color'], file_data['label'])
+    label = "${argfile%.*}_${itype_upper}"
+    plot_crystal_fraction(file_pattern, '#714882', label)
 
-    plt.title('$itype_upper Atom Count Over Time')
-    plt.xlabel('Time/10$^{-2}ns$')
-    plt.ylabel('Fraction of $itype_upper Atoms')
-    plt.grid(True)
+    plt.title(f'{crystal_type} Atom Fraction Over Frames')
+    plt.xlabel('Frame index')
+    plt.ylabel(f'Fraction of {crystal_type} Atoms')
     plt.legend(loc='upper right')
-    plt.savefig("${itype_upper}_atom_fraction.png")
+    plt.tight_layout()
+    plt.savefig(f"{crystal_type}_atom_fraction.png", dpi=300)
 
-
-file_list = [
-    {'pattern': '${argfile}', 'color': '#714882', 'label': '${argfile%.*}_$itype_upper'}
-]  # 更多文件可以添加到列表
-
-# 调用函数
-setup_and_save_plot(file_list)
+setup_and_save_plot()
 EOF
 }
+
 
 analysis_grains_size(){
 # 该函数使用来分析模型文件中的晶粒大小，其将会分析某种特定的晶粒类型（如FCC）的每个晶粒中该类型的原子数量，并将其保存到文件中
@@ -1456,8 +1389,14 @@ EOF
     tail -n 1 build_desorption_model.log
 }
 
+analyze_xyz(){
+# 该函数用来分析xyz文件的详细信息
+    cp $HOME/.rebreath/deal_data/analyze_xyz_detail.py .
+    python3 analyze_xyz_detail.py $1
+}
 
-mkandsort(){
+
+copy_each_to_own_dir(){
 # 该函数可以读取一类指定后缀的文件，将会创建一系列文件夹而后将文件分类到文件夹中
 # 例如指定xyz类型的文件，则会创建一系列去除xyz后缀的文件夹，将xyz文件放到指定的xyz文件夹中
 
@@ -1469,7 +1408,7 @@ mkandsort(){
     done
 }
 
-sendtoall(){
+cp_file_to_subdirs(){
 #该函数将会将一个指定的文件送到当前目录下所有的文件夹中
     local sfile=${1}
     for i in $(find $PWD -maxdepth 1 -mindepth 1  -type d);do
@@ -1481,4 +1420,235 @@ calc_xrd_usedebyer(){
 # 该函数使用debyer计算xrd,目前主要计算碳纤维的xrd
     local xyzfile=${1:-opted.xyz}
     debyer -x -l1.5406 -f5 -t80 -s0.02 -o xrd.dat $xyzfile
+}
+
+xyz_group_by_type(){
+# 该函数用来将原子按照原子类型分组
+# 使用方法：xyz_group_by_type opted.xyz
+    local xyzfile=${1}
+    if [ -z "$xyzfile" ]; then
+        echo "Error: xyzfile is not set."
+        echo "Usage: xyz_group_by_type <xyzfile>"
+        return 1
+    fi
+    exec 3< "$HOME/.rebreath/deal_data/grouping_use_atomtype.py"
+    python3 /dev/fd/3 -- "$xyzfile"
+    exec 3<&-
+}
+
+
+supercell_auto_cubic() {
+# 该函数用来智能扩胞，根据原子的分布情况，自动判断如何扩胞才能达到目标原子数，并且尽可能使box为正方体形状
+# 使用方法：supercell_auto_cubic opted.xyz 10000
+    local xyzfile="$1"
+    local targetnumber="$2"
+
+    if [ "$#" -ne 2 ]; then
+    echo "Usage: supercell_auto_cubic <xyzfile> <targetnumber>"
+    return 1
+    fi
+
+    exec 3< "$HOME/.rebreath/deal_data/supercell_auto_cubic.py"
+    python3 /dev/fd/3 -- "$xyzfile" "$targetnumber"
+    exec 3<&-
+}
+
+get_phonon_spectrum_mpdata(){
+# 该函数用来获取material project 中指定mpid的 phonon 谱图
+# 使用方法：get_phonon_spectrum_mpdata mp-2741 
+# 可选参数：method, 默认为dfpt
+# 原理：
+# 1. 从material project 中下载指定mpid的 phonon 谱图
+# 2. 调用plot_phonon_spectrum_mpdata.py 绘制 phonon 谱图
+
+    local mpid=${1}
+    local method=${2:-dfpt}
+
+    if [ -z "$mpid" ]; then
+        echo "Error: mpid is not set."
+        echo "Usage: get_phonon_spectrum_mpdata <mpid>"
+        return 1
+    fi
+    cp $HOME/.rebreath/compute_lib/mp_phonon_data_extract.py  .
+    python3 mp_phonon_data_extract.py $mpid $method
+    cp $HOME/.rebreath/compute_lib/plot_phonon_spectrum_mpdata.py  .
+    python3 plot_phonon_spectrum_mpdata.py ${mpid}_phonon_bs_${method}.json
+}
+
+
+plot_volume_per_atom_xyz() {
+    local xyz_file="$1"
+    local out_dat="${2:-volume_per_atom.dat}"
+    local out_png="${3:-volume_per_atom.png}"
+
+    if [ -z "$xyz_file" ]; then
+        echo "Usage: plot_volume_per_atom_xyz input.xyz [output.dat] [output.png]"
+        return 1
+    fi
+
+    if [ ! -f "$xyz_file" ]; then
+        echo "File not found: $xyz_file"
+        return 1
+    fi
+
+    python - "$xyz_file" "$out_dat" "$out_png" <<'PY'
+import sys
+import numpy as np
+from ase.io import iread
+import matplotlib.pyplot as plt
+
+xyz_file = sys.argv[1]
+out_dat = sys.argv[2]
+out_png = sys.argv[3]
+
+steps = []
+volumes = []
+natoms_list = []
+vpa_list = []
+
+for i, atoms in enumerate(iread(xyz_file, index=":")):
+    natoms = len(atoms)
+    cell = atoms.get_cell()
+
+    if cell is None or abs(cell.volume) < 1e-12:
+        raise ValueError(
+            f"Frame {i} has no valid cell information. "
+            "Your xyz trajectory must contain lattice/cell info for volume calculation."
+        )
+
+    volume = atoms.get_volume()
+    vpa = volume / natoms
+
+    steps.append(i)
+    natoms_list.append(natoms)
+    volumes.append(volume)
+    vpa_list.append(vpa)
+
+data = np.column_stack([steps, natoms_list, volumes, vpa_list])
+header = "step natoms total_volume_A3 volume_per_atom_A3"
+np.savetxt(out_dat, data, header=header, fmt=["%d", "%d", "%.6f", "%.6f"])
+
+print(f"prim volume_per_atom_A3 = {vpa_list[0]:.3f}")
+print(f"last volume_per_atom_A3 = {vpa_list[-1]:.3f}")
+
+plt.figure(figsize=(7, 5))
+plt.plot(steps, vpa_list, linewidth=1.8)
+plt.xlabel("Frame")
+plt.ylabel(r"Volume per atom ($\AA^3$/atom)")
+plt.title("Volume per atom evolution")
+plt.tight_layout()
+plt.savefig(out_png, dpi=300)
+print(f"Saved data to: {out_dat}")
+print(f"Saved figure to: {out_png}")
+PY
+}
+
+
+generate_vacancy_defect_xyz() {
+    # 用法:
+    # generate_vacancy_defect_xyz input.xyz output.xyz defect_fraction [species] [seed]
+    #
+    # 例子:
+    # generate_vacancy_defect_xyz perfect.xyz Al_vac_1pct.xyz 0.01 Al 123
+    # generate_vacancy_defect_xyz perfect.xyz N_vac_2pct.xyz 0.02 N 123
+    # generate_vacancy_defect_xyz perfect.xyz rand_vac_1pct.xyz 0.01 all 123
+    #
+    # 参数:
+    #   input.xyz         输入xyz文件
+    #   output.xyz        输出xyz文件
+    #   defect_fraction   缺陷比例，例如 0.01 表示删除1%
+    #   species           删除的元素类型: Al / N / all，默认 all
+    #   seed              随机种子，默认 12345
+
+    local input_file="$1"
+    local output_file="$2"
+    local defect_fraction="$3"
+    local species="${4:-all}"
+    local seed="${5:-12345}"
+
+    if [[ -z "$input_file" || -z "$output_file" || -z "$defect_fraction" ]]; then
+        echo "Usage: generate_vacancy_defect_xyz input.xyz output.xyz defect_fraction [species] [seed]"
+        return 1
+    fi
+
+    if [[ ! -f "$input_file" ]]; then
+        echo "Error: input file '$input_file' not found."
+        return 1
+    fi
+
+    python3 - << EOF
+import random
+import math
+
+input_file = "${input_file}"
+output_file = "${output_file}"
+defect_fraction = float("${defect_fraction}")
+species = "${species}"
+seed = int("${seed}")
+
+if defect_fraction < 0 or defect_fraction >= 1:
+    raise ValueError("defect_fraction must satisfy 0 <= defect_fraction < 1")
+
+random.seed(seed)
+
+with open(input_file, "r") as f:
+    lines = [line.rstrip("\n") for line in f]
+
+if len(lines) < 3:
+    raise ValueError("Input xyz file is too short.")
+
+try:
+    natoms = int(lines[0].strip())
+except Exception:
+    raise ValueError("First line of xyz must be the atom count.")
+
+comment = lines[1]
+atom_lines = lines[2:]
+
+if len(atom_lines) != natoms:
+    raise ValueError(f"XYZ format mismatch: header says {natoms} atoms, but found {len(atom_lines)} atom lines.")
+
+# 解析原子行
+parsed_atoms = []
+for i, line in enumerate(atom_lines):
+    parts = line.split()
+    if len(parts) < 4:
+        raise ValueError(f"Invalid atom line at index {i}: '{line}'")
+    elem = parts[0]
+    parsed_atoms.append((elem, line))
+
+# 选择可删除的原子索引
+if species.lower() == "all":
+    candidate_indices = list(range(len(parsed_atoms)))
+else:
+    candidate_indices = [i for i, (elem, _) in enumerate(parsed_atoms) if elem == species]
+
+if len(candidate_indices) == 0:
+    raise ValueError(f"No atoms of species '{species}' found in file.")
+
+n_remove = int(round(len(candidate_indices) * defect_fraction))
+
+if n_remove == 0 and defect_fraction > 0:
+    n_remove = 1
+
+if n_remove > len(candidate_indices):
+    raise ValueError("Requested removal count exceeds available candidate atoms.")
+
+remove_indices = set(random.sample(candidate_indices, n_remove))
+
+new_atom_lines = [line for i, (_, line) in enumerate(parsed_atoms) if i not in remove_indices]
+new_natoms = len(new_atom_lines)
+
+with open(output_file, "w") as f:
+    f.write(f"{new_natoms}\n")
+    f.write(comment + f" | vacancy_defect fraction={defect_fraction} species={species} seed={seed}\n")
+    for line in new_atom_lines:
+        f.write(line + "\n")
+
+print(f"Input atoms      : {natoms}")
+print(f"Candidate atoms  : {len(candidate_indices)}")
+print(f"Removed atoms    : {n_remove}")
+print(f"Output atoms     : {new_natoms}")
+print(f"Output written to: {output_file}")
+EOF
 }

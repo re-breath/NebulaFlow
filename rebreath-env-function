@@ -2,7 +2,7 @@
 #环境变量部分的函数
 #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
-echo "#env setting"> ~/.rebreath/.config
+#echo "#env setting"> ~/.rebreath/.config
 source ~/.rebreath/.config
 export PATH=$PATH:$HOME/.rebreath
 alias loadenv='source ~/.bashrc'
@@ -383,11 +383,32 @@ addpath(){
 }
 
 wc_file_lines() {
-    # 查找当前目录及其子目录下的所有 后缀为$model_name 的文件，并统计每个文件的行数
-    # 然后按行数排序并输出前三个文件
-    local model_name=$1
-    find . -name "*.$model_name" -type f -exec wc -l {} + | sort -nr | head -n 6 | tail -n 5
-    echo "Total lines in all .$model_name files:"
-    find . -name "*.$model_name" -type f -exec wc -l {} + | tail -n 1 | awk '{print $1}'
-}
+    # 用法: wc_file_lines cpp h
+    # 查找当前目录及其子目录下所有指定后缀的文件
+    # 统计每个文件行数，按行数倒序输出前5个文件
+    # 最后输出这些文件的总行数
 
+    if [ $# -eq 0 ]; then
+        echo "用法: wc_file_lines <suffix1> [suffix2] ..."
+        return 1
+    fi
+
+    local find_args=()
+    local first=1
+
+    for ext in "$@"; do
+        if [ $first -eq 1 ]; then
+            first=0
+        else
+            find_args+=(-o)
+        fi
+        find_args+=(-name "*.$ext")
+    done
+
+    find . -type f \( "${find_args[@]}" \) -exec wc -l {} + | \
+        sort -nr | head -n 6 | tail -n 5
+
+    echo "Total lines in all specified files:"
+    find . -type f \( "${find_args[@]}" \) -exec wc -l {} + | \
+        tail -n 1 | awk '{print $1}'
+}

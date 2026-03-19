@@ -137,43 +137,34 @@ def analyze_structure(data):
         status = "是" if is_pbc else "否"
         print(f"   - {name}周期性: {status}")
     
-    # 4. 密度计算
+    from ase.data import atomic_numbers, atomic_masses
+
+# 4. 密度计算
     print(f"\n4. 密度计算:")
     if data['lattice_params'] and data['atoms']:
-        # 原子质量 (单位: g/mol)
-        atomic_masses = {
-            'C': 12.011,   # 碳
-            'H': 1.008,    # 氢
-            'O': 15.999,   # 氧
-            'N': 14.007,   # 氮
-            'Si': 28.085,  # 硅
-            'Ge': 72.63,   # 锗
-            # 可以根据需要添加更多元素
-        }
-        
-        # 计算总质量
+        # 计算总摩尔质量 (g/mol)
         total_mass = 0.0
         for atom in data['atoms']:
-            elem = atom['element']
-            if elem in atomic_masses:
-                total_mass += atomic_masses[elem]
-            else:
-                print(f"   警告: 未知元素 '{elem}'，使用默认质量 12.0 g/mol")
-                total_mass += 12.0
-        
-        # 阿伏伽德罗常数
+            elem = atom['element']  # 例如 'Si'
+            try:
+                Z = atomic_numbers[elem]          # 原子序数
+                total_mass += atomic_masses[Z]    # g/mol
+            except KeyError:
+                # 元素符号不合法时才会进来（比如写成 'SI' 或带空格）
+                raise ValueError(f"未知/非法元素符号: {elem!r}")
+
+        # 阿伏伽德罗常数 (1/mol)
         avogadro = 6.02214076e23
-        
-        # 单位转换: g/mol -> g (每个晶胞)
-        mass_per_cell = total_mass / avogadro  # 克
-        
-        # 体积转换: Å³ -> cm³
+
+        # g/mol -> g (每个晶胞)
+        mass_per_cell = total_mass / avogadro  # g
+
+        # Å^3 -> cm^3
         volume_cm3 = volume * 1e-24
+
         global density
-        
-        # 计算密度
         if volume_cm3 > 0:
-            density = mass_per_cell / volume_cm3  # g/cm³
+            density = mass_per_cell / volume_cm3  # g/cm^3
             print(f"   - 总原子质量: {total_mass:.4f} g/mol")
             print(f"   - 晶胞质量: {mass_per_cell:.4e} g")
             print(f"   - 晶胞体积: {volume_cm3:.4e} cm³")

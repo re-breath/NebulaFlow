@@ -81,6 +81,7 @@ python3 plot_E_F_Vir_distribution.py
 
 plot_hnemd(){
 #该函数用来画hnemd的图像，自动识别路径中的的_{xyz},以此来对特定方向的hnemd画图
+
     lib_address="$HOME/.rebreath/plot_library/"
     
     find $PWD -type f -regex '.*kappa.out' | while read -r file;do
@@ -99,6 +100,64 @@ plot_hnemd(){
     cd - >/dev/null
     done
 }
+
+plot_hnemd_para() {
+  # 自动识别路径中的 _{xyz} 并并行画图
+  local lib_address="$HOME/.rebreath/plot_library"
+  local root="${1:-$PWD}"
+
+  # ---- 计算并行度：基于空闲核估算 ----
+  local total load1 used free jobs
+  total=$(nproc --all)
+
+  # 取 /proc/loadavg 第一列作为 1min load
+  load1=$(awk '{print $1}' /proc/loadavg)
+  # 取整数部分
+  used=${load1%.*}
+  [[ -z "$used" ]] && used=0
+
+  free=$(( total - used ))
+  (( free < 1 )) && free=1
+
+  # 用 80% 的空闲核，避免打满
+  jobs=$(( (free * 8) / 10 ))
+  (( jobs < 1 )) && jobs=1
+  (( jobs > total )) && jobs=$total
+
+  echo "CPU total=$total, load1=$load1, est_free=$free, parallel_jobs=$jobs"
+
+  # ---- 收集任务：每个 kappa.out -> (dir, direction) ----
+  # 输出格式：<dir>\t<direction>
+  find "$root" -type f -name "kappa.out" -print0 |
+    while IFS= read -r -d '' file; do
+      if [[ "$file" =~ _([xyz])(/|_) ]]; then
+        # 更严格：匹配路径中出现 _x / _y / _z（避免误匹配）
+        hnemd_direct="${BASH_REMATCH[1]}"
+        dir="$(dirname "$file")"
+        printf '%s\t%s\n' "$dir" "$hnemd_direct"
+      elif [[ "$file" =~ _([xyz]) ]]; then
+        # 兜底：只要出现 _x/_y/_z 就认
+        hnemd_direct="${BASH_REMATCH[1]}"
+        dir="$(dirname "$file")"
+        printf '%s\t%s\n' "$dir" "$hnemd_direct"
+      else
+        echo "[跳过] 没找到方向标记 _{x|y|z} : $file" >&2
+      fi
+    done |
+    # ---- 并行执行 ----
+    xargs -P "$jobs" -n 1 -I {} bash -c '
+      set -euo pipefail
+      line="{}"
+      dir="${line%%$'\''\t'\''*}"
+      direct="${line##*$'\''\t'\''}"
+      lib_address="'"$lib_address"'"
+
+      echo -e "\n——> 处理: $dir (direction=$direct)"
+      cd "$dir"
+      python3 "$lib_address/plot_hnemd_${direct}.py"
+    '
+}
+
 
 plot_mul_hnemd(){
 #找到average文件夹，自动识别该文件路径中的方向，对其中的文件进行画图
@@ -152,7 +211,7 @@ start_mul_hnemd(){
     done
 }
 
-start_mul_hnemd() {
+start_mul_hnemd_shuguang() {
     # 该函数用来启动gpumd的hnemd方法来计算热导率，可以进行制定次数的热导率的计算
     # 使用方法：start_mul_hnemd nep.txt 6 1 将会使用gpumd进行6次热导率的计算，每个计算使用1个核
     local nepfile=${1:-nep.txt}
@@ -174,6 +233,26 @@ start_mul_hnemd() {
         # 运行 gpumd (示例命令，根据实际情况调整)
         gpumd_dcu_394 -n $core_num
 
+        cd $init_address
+    done
+}
+
+start_mul_hnemd() {
+    # 该函数用来启动gpumd的hnemd方法来计算热导率，可以进行制定次数的热导率的计算
+    # 使用方法：start_mul_hnemd nep.txt 6 1 将会使用gpumd进行6次热导率的计算，每个计算使用1个核
+    local nepfile=${1:-nep.txt}
+    local times=${2:-6}
+    local core_num=${3:-1}
+    local init_address=$PWD
+
+    # 生成大于10000的质数列表
+
+    for i in $(seq 1 $((times-1))); do
+        mkdir -p hnemd_${i}
+        cp $nepfile model.xyz run.in hnemd_${i}/
+        cd hnemd_${i}
+        free_time_run 'nohup gpumd > nohup.out 2>&1 &'
+        sleep 1
         cd $init_address
     done
 }
@@ -249,13 +328,19 @@ echo "已经完成 $1  $2  $3 扩胞"
 
 compute_elastic_moduli(){
 #使用calorine计算弹性模量 使用方法  compute_elastic_moduli   nepfile
-    local compute_lib=/home/dhk/.rebreath/compute_lib
+    local compute_lib=$HOME/.rebreath/compute_lib
     local nep_file=${1:-nep.txt}
     sed "s/nepfile/$nep_file/g" $compute_lib/calorine_compute_elastic.py > calorine_compute_elastic.py
     python3 calorine_compute_elastic.py > elastic_calorine.txt
     rm -f calorine_compute_elastic.py 
     cat elastic_calorine.txt
 }
+
+compute_phonon_spectrum() {
+  local script="$HOME/.rebreath/compute_lib/gpumd_compute_phonon_spectrum.py"
+  python3 - < "$script"
+}
+
 
 gpumdstart_rebreath(){
     #!/bin/bash

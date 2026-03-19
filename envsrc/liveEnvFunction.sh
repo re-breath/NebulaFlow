@@ -106,3 +106,94 @@ compare_folders() {
         fi
     done
 }
+
+# 该函数用来将多个png文件合并为一个pdf文件
+# 依赖安装：pip install pillow
+png2pdf() {
+  # usage: png2pdf in.png [out.pdf]  OR  png2pdf *.png out.pdf
+  python - <<'PY' "$@"
+import sys, os
+from PIL import Image
+
+args = sys.argv[1:]
+if not args:
+    print("Usage: png2pdf <in.png|*.png> [out.pdf]")
+    sys.exit(2)
+
+# if last arg is pdf -> output
+if len(args) >= 2 and args[-1].lower().endswith(".pdf"):
+    out = args[-1]
+    ins = args[:-1]
+else:
+    out = (os.path.splitext(args[0])[0] + ".pdf") if len(args)==1 else "merged.pdf"
+    ins = args
+
+imgs = []
+for p in ins:
+    im = Image.open(p)
+    # handle transparency -> white background
+    if im.mode in ("RGBA", "LA") or (im.mode == "P" and "transparency" in im.info):
+        bg = Image.new("RGB", im.size, (255,255,255))
+        bg.paste(im.convert("RGBA"), mask=im.convert("RGBA").split()[-1])
+        im = bg
+    else:
+        im = im.convert("RGB")
+    imgs.append(im)
+
+first, rest = imgs[0], imgs[1:]
+first.save(out, "PDF", save_all=True, append_images=rest)
+print("Saved:", out)
+PY
+}
+
+
+pdf2eps() {
+  local input_dir="${1:-.}"
+  local output_dir="${2:-./eps_output}"
+
+  if ! command -v pdftops >/dev/null 2>&1; then
+    echo "错误: 没有找到 pdftops，请先安装 poppler。"
+    return 1
+  fi
+
+  mkdir -p "$output_dir" || return 1
+
+  find "$input_dir" -type f -iname "*.pdf" | while IFS= read -r pdf; do
+    local rel name out
+    name="$(basename "$pdf" .pdf)"
+    out="$output_dir/${name}.eps"
+
+    echo "转换: $pdf -> $out"
+    pdftops -eps "$pdf" "$out"
+  done
+}
+
+
+pdfs_to_eps_pages() {
+  local input_dir="${1:-.}"
+  local output_dir="${2:-./eps_output}"
+
+  if ! command -v pdfinfo >/dev/null 2>&1 || ! command -v pdftops >/dev/null 2>&1; then
+    echo "错误: 需要 pdfinfo 和 pdftops，请先安装 poppler。"
+    return 1
+  fi
+
+  mkdir -p "$output_dir" || return 1
+
+  find "$input_dir" -type f -iname "*.pdf" | while IFS= read -r pdf; do
+    local name pages i out
+    name="$(basename "$pdf" .pdf)"
+    pages="$(pdfinfo "$pdf" 2>/dev/null | awk '/^Pages:/ {print $2}')"
+
+    if [ -z "$pages" ]; then
+      echo "跳过: 无法读取页数 $pdf"
+      continue
+    fi
+
+    for ((i=1; i<=pages; i++)); do
+      out="$output_dir/${name}_p${i}.eps"
+      echo "转换: $pdf 第 $i 页 -> $out"
+      pdftops -eps -f "$i" -l "$i" "$pdf" "$out"
+    done
+  done
+}

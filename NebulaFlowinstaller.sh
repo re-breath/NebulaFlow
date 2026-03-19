@@ -11,6 +11,7 @@ if ! grep -q "WRITENEBULAFLOW2ENV" "$HOME/.bashrc"; then
 
 WRITENEBULAFLOW2ENV=1      
 export PATH=$PATH:$HOME/.rebreath
+export BASH_ENV="$HOME/.rebreath/rebreath-env-function"
 source $HOME/.rebreath/rebreath-env-function
 
 #------------------------------------------------
