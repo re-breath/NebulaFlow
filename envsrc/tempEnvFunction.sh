@@ -492,3 +492,65 @@ cp2desktop(){
 mv2desktop(){
     mv $1 /mnt/c/Users/rebreath.REBREATH-TX4/Desktop
 }
+
+# AlN临时函数，对所有的dump.xyz分析结晶原子数
+# 该函数将会查找当前文件夹下所有的dump.xyz文件，并对其进行并行化晶型分析
+AlN_analyze_phase() {
+    while IFS= read -r -d '' file; do
+        dir=$(dirname "$file")
+        base=$(basename "$file")
+
+        echo "Processing: $file"
+
+        (
+            cd "$dir" || exit 1
+            analyze_crystallinity_fraction SC "$base"
+            analyze_crystallinity_fraction HEX_DIAMOND "$base"
+        ) &
+
+        # (
+        #     cd "$dir" || exit 1
+        #     analyze_crystallinity_fraction HEX_DIAMOND "$base"
+        # ) &
+    done < <(find . -name "dump.xyz" -print0)
+
+    wait
+}
+
+# 该函数用于检查所有的dump_SC.txt文件的最后一列是否为0
+# 如果不为0，则输出该文件的路径和最后一列的值
+check_dump_sc_lastcol() {
+    find . -name "dump_SC.txt" -print0 | while IFS= read -r -d '' file; do
+        value=$(awk 'NF{last=$2} END{print last}' "$file")
+
+        if [ -z "$value" ]; then
+            echo "Empty or invalid file: $file"
+            continue
+        fi
+
+        awk -v v="$value" 'BEGIN { exit (v == 0 ? 0 : 1) }'
+        if [ $? -ne 0 ]; then
+            echo "$(dirname "$file")  -> last line second column = $value"
+        fi
+    done
+}
+
+
+check_dump_hex_lastcol() {
+    find . -name "dump_HEX_DIAMOND.txt" -print0 | while IFS= read -r -d '' file; do
+        # 提取最后一行有内容的行的第二列值
+        value=$(awk 'NF{last=$2} END{print last}' "$file")
+
+        # 处理空文件或无有效内容的情况
+        if [ -z "$value" ]; then
+            echo "Empty or invalid file (no valid content): $file"
+            continue
+        fi
+
+        # 检查值是否不等于 1
+        awk -v v="$value" 'BEGIN { exit (v == 1 ? 0 : 1) }'
+        if [ $? -ne 0 ]; then
+            echo "$(dirname "$file")  -> last line second column = $value (expected 1)"
+        fi
+    done
+}

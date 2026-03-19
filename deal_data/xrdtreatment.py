@@ -1,4 +1,5 @@
 # 该脚本使用来分析XRD.exe输出的结果
+# 已经弃用，该方法比较原始，基线的拟合太过简单，不建议使用
 
 import numpy as np
 from scipy.optimize import curve_fit

@@ -1,123 +1,139 @@
-from pylab import *
-from ase.build import graphene_nanoribbon
-from gpyumd.atoms import GpumdAtoms
-from ase.io import write
-from gpyumd.load import load_shc, load_kappa
-from gpyumd.math import running_ave
-from gpyumd.calc import calc_spectral_kappa
-aw = 2
-fs = 16
-font = {'size'   : fs}
-matplotlib.rc('font', **font)
-matplotlib.rc('axes' , linewidth=aw)
-
-def set_fig_properties(ax_list):
-    tl = 8
-    tw = 2
-    tlm = 4
-
-    for ax in ax_list:
-        ax.tick_params(which='major', length=tl, width=tw)
-        ax.tick_params(which='minor', length=tlm, width=tw)
-        ax.tick_params(which='both', axis='both', direction='in', right=True, top=True)
-kappa = load_kappa()
-kappa.keys()
-t = np.arange(1,kappa['kxi'].shape[0]+1)*0.001  # ns
-kappa['kyi_ra'] = running_ave(kappa['kyi'],t)
-kappa['kyo_ra'] = running_ave(kappa['kyo'],t)
-kappa['kxi_ra'] = running_ave(kappa['kxi'],t)
-kappa['kxo_ra'] = running_ave(kappa['kxo'],t)
-kappa['kz_ra'] = running_ave(kappa['kz'],t)
-figure(figsize=(12,10))
-subplot(2,2,1)
-set_fig_properties([gca()])
-plot(t, kappa['kxi'],color='C7',alpha=0.5)
-plot(t, kappa['kxi_ra'], linewidth=2)
-# xlim([0, 10])
-# gca().set_xticks(range(0,11,2))
-# ylim([-2000, 4000])
-# gca().set_yticks(range(-2000,4001,1000))
-xlabel('time (ns)')
-ylabel(r'$\kappa_{in}$ W/m/K')
-title('(a)')
-
-subplot(2,2,2)
-set_fig_properties([gca()])
-plot(t, kappa['kxo'],color='C7',alpha=0.5)
-plot(t, kappa['kxo_ra'], linewidth=2, color='C3')
-# xlim([0, 10])
-# gca().set_xticks(range(0,11,2))
-# ylim([-400,1400])
-# gca().set_yticks(range(-400,1401,200))
-xlabel('time (ns)')
-ylabel(r'$\kappa_{out}$ (W/m/K)')
-title('(b)')
-
-subplot(2,2,3)
-set_fig_properties([gca()])
-plot(t, kappa['kxi_ra'], linewidth=2)
-plot(t, kappa['kxo_ra'], linewidth=2, color='C3')
-plot(t, kappa['kxi_ra']+kappa['kxo_ra'], linewidth=2, color='k')
-# xlim([0, 10])
-# gca().set_xticks(range(0,11,2))
-# ylim([-200,1000])
-# gca().set_yticks(range(-200,1001,200))
-xlabel('time (ns)')
-ylabel(r'$\kappa$ (W/m/K)')
-legend(['in', 'out', 'total'])
-title('(c)')
-
-
-subplot(2,2,4)
-set_fig_properties([gca()])
-plot(t, kappa['kyi_ra']+kappa['kyo_ra'],color='k', linewidth=2)
-plot(t, kappa['kxi_ra']+kappa['kxo_ra'], color='C0', linewidth=2)
-plot(t, kappa['kz_ra'], color='C3', linewidth=2)
-print(f"最后一个x方向的热导率为 ：{kappa['kxi_ra'][-1],kappa['kxo_ra'][-1]}")
-# xlim([0, 10])
-# gca().set_xticks(range(0,11,2))
-# ylim([-500,1000])
-# gca().set_yticks(range(-500,1001,300))
-xlabel('time (ns)')
-ylabel(r'$\kappa$ (W/m/K)')
-legend(['yx', 'xx', 'zx'])
-title('(d)')
-
-tight_layout()
-savefig('hnemd.png')
-
+#!/usr/bin/env python3
 import numpy as np
-# 计算特定时间范围内对应y的所有数据的平均值
-# 子图(a)
-indices_a = np.where((t >= 6) & (t <= 8))
-x_values_a = kappa['kxi_ra'][indices_a]
-average_kappa_a = np.mean(x_values_a)
-
-# 子图(b)
-indices_b = np.where((t >= 6) & (t <= 8))
-x_values_b = kappa['kxo_ra'][indices_b]
-average_kappa_b = np.mean(x_values_b)
-
-# 子图(c)
-indices_c_in = np.where((t >= 6) & (t <= 8))
-indices_c_out = np.where((t >= 6) & (t <= 8))
-x_values_c_in = kappa['kxi_ra'][indices_c_in]
-x_values_c_out = kappa['kxo_ra'][indices_c_out]
-average_kappa_c_in = np.mean(x_values_c_in)
-average_kappa_c_out = np.mean(x_values_c_out)
-
-# 子图(d)
-indices_d = np.where((t >= 6) & (t <= 8))
-x_values_d = kappa['kxi_ra']+kappa['kxo_ra']
-average_kappa_d = np.mean(x_values_d)
-
-# 输出平均值到文件
-output_file = open('average_kappa_values.txt', 'w')
-output_file.write("子图(a) 平均热导率值为： " + str(average_kappa_a) + "\n")
-output_file.write("子图(b) 平均热导率值为： " + str(average_kappa_b) + "\n")
-output_file.write("子图(c) in 平均热导率值为： " + str(average_kappa_c_in) + "\n")
-output_file.write("子图(c) out 平均热导率值为： " + str(average_kappa_c_out) + "\n")
-output_file.write("子图(d) 平均热导率值为： " + str(average_kappa_d))
-output_file.close()
+import matplotlib as mpl
+import matplotlib.pyplot as plt
+import pandas as pd
+from typing import Dict, Optional, Tuple
+mpl.use("Agg")
+from gpyumd.math import running_ave
+import gpyumd.util as util
 
 
+def load_kappa_local(filename: str = "kappa.out", directory: Optional[str] = None) -> Dict[str, np.ndarray]:
+    """
+    本地版本 load_kappa：避免 gpyumd 接口变化/弃用警告。
+    读取 GPUMD HNEMD 输出 kappa.out（5列：kxi kxo kyi kyo kz）。
+    """
+    kappa_path = util.get_path(directory, filename)
+    data = pd.read_csv(kappa_path, sep=r"\s+", header=None)
+
+    labels = ["kxi", "kxo", "kyi", "kyo", "kz"]
+    out: Dict[str, np.ndarray] = {}
+    for i, key in enumerate(labels):
+        out[key] = data[i].to_numpy(dtype=float)
+    return out
+
+
+def style_matplotlib(fontsize: int = 12, axes_linewidth: float = 2.5) -> None:
+    """统一画图风格：更接近你给的那张图。"""
+    mpl.rcParams.update({
+        "font.size": fontsize,
+        "axes.linewidth": axes_linewidth,
+        "xtick.direction": "in",
+        "ytick.direction": "in",
+    })
+
+
+def estimate_plateau(
+    t: np.ndarray,
+    y: np.ndarray,
+    tail_ns: Optional[float] = 2.0,
+    tail_frac: float = 0.2,
+    min_points: int = 200,
+) -> Tuple[float, float, Tuple[int, int]]:
+    """
+    平台段估计：取末尾一段做 mean ± std。
+    - 优先用 tail_ns（末尾多少 ns），若为 None 则用 tail_frac（末尾比例）
+    """
+    t = np.asarray(t)
+    y = np.asarray(y)
+    n = y.size
+    if n < 5:
+        raise ValueError("数据点太少，无法估计平台段。")
+
+    if tail_ns is not None:
+        t_start = t[-1] - float(tail_ns)
+        i0 = int(np.searchsorted(t, t_start, side="left"))
+    else:
+        if not (0 < tail_frac <= 1):
+            raise ValueError("tail_frac 必须在 (0,1] 之间。")
+        i0 = int(max(0, np.floor(n * (1 - tail_frac))))
+
+    i1 = n
+    if (i1 - i0) < min_points:
+        i0 = max(0, i1 - min_points)
+
+    seg = y[i0:i1]
+    mean = float(np.mean(seg))
+    std = float(np.std(seg, ddof=1)) if seg.size > 1 else 0.0
+    return mean, std, (i0, i1)
+
+
+def main(
+    dt_ns: float = 0.001,
+    kappa_file: str = "kappa.out",
+    out_png: str = "hnemd_x.png",
+    out_txt: str = "kappa_dealed.txt",
+    tail_ns: Optional[float] = None,   # 末尾平台段长度（ns）；不想用固定时长就设为 None
+    tail_frac: float = 0.1,           # tail_ns=None 时生效：取末尾比例
+):
+    style_matplotlib(fontsize=10, axes_linewidth=1.0)
+
+    kappa = load_kappa_local(filename=kappa_file)
+
+    # 时间轴
+    n = kappa["kxi"].shape[0]
+    t = np.arange(1, n + 1) * dt_ns  # ns
+
+    # running average（按你当前做法：分别RA后再相加）
+    kxi_ra = running_ave(kappa["kxi"], t)
+    kxo_ra = running_ave(kappa["kxo"], t)
+    kx_ra = kxi_ra + kxo_ra
+
+    # 如果你想“先相加再RA”，用下面两行替代上面三行：
+    # kx = kappa["kxi"] + kappa["kxo"]
+    # kx_ra = running_ave(kx, t)
+
+    # 平台估计
+    kx_mean, kx_std, (i0, i1) = estimate_plateau(t, kx_ra, tail_ns=tail_ns, tail_frac=tail_frac)
+    t0, t1 = float(t[i0]), float(t[i1 - 1])
+
+    print(f"kx（平台段平均）: {kx_mean:.2f} ± {kx_std:.2f} W/m/K (std)")
+    print(f"平台段: {t0:.3f} ~ {t1:.3f} ns, points={i1 - i0}")
+
+    # 保存 txt：两列 time, kappa_x_running_average
+    header = (
+        "time(ns)  kappa_x_running_average(W/m/K)\n"
+        f"plateau_mean={kx_mean:.6f}  plateau_std={kx_std:.6f}  plateau_range_ns=[{t0:.6f}, {t1:.6f}]"
+    )
+    np.savetxt(out_txt, np.column_stack([t, kx_ra]), fmt="%.6f", header=header)
+
+    # 画图（风格尽量贴你那张图）
+    fig, ax = plt.subplots(figsize=(5, 4), dpi=220)
+
+    ax.plot(t, kx_ra, linewidth=1.6, color="#6C81A2")
+
+    # 平台阴影 + 平均虚线（虚线偏红一点更醒目，但不指定颜色也可以；你要完全默认就删 color）
+    ax.axvspan(t0, t1, alpha=0.15, color="#12F4A1")
+    ax.axhline(kx_mean, linestyle="--", linewidth=2, alpha=0.6, color="#737CF6")
+
+    ax.set_xlabel("time (ns)", fontweight="bold", fontsize=10)
+    ax.set_ylabel(r"$\mathbf{\kappa_x}$ (W/m/K)", fontweight="bold", fontsize=10)
+
+    ax.text(
+        0.97, 0.97,
+        r"$\mathbf{\kappa_x}$ = "
+        f"{kx_mean:.2f} $\pm$ {kx_std:.2f} W/m/K",
+        transform=ax.transAxes,
+        ha="right", va="top",
+        fontweight="bold",
+        bbox=dict(boxstyle="round,pad=0.35", alpha=0.0)  # 不要框就 alpha=0
+    )
+
+    fig.tight_layout()
+    fig.savefig(out_png, bbox_inches="tight")
+    plt.close(fig)
+
+
+if __name__ == "__main__":
+    main()
