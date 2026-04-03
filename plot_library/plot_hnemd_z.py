@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 mpl.use("Agg")
 
 from gpyumd.load import load_kappa
-from gpyumd.math import running_ave
+
 import gpyumd.util as util
 import pandas as pd
 from typing import Dict
@@ -27,6 +27,50 @@ def style_matplotlib(fontsize=2, axes_linewidth=1, tick_len=3, tick_w=1.5, minor
         "ytick.minor.width": tick_w,
     })
 
+
+def running_ave(y: np.ndarray, x: np.ndarray) -> np.ndarray:
+    """
+    Compute the cumulative average of y with respect to x
+    using the trapezoidal rule, without SciPy.
+
+    Parameters
+    ----------
+    y : np.ndarray
+        Dependent variable values.
+    x : np.ndarray
+        Independent variable values.
+
+    Returns
+    -------
+    np.ndarray
+        Running average array with the same length as x.
+    """
+    y = np.asarray(y, dtype=float)
+    x = np.asarray(x, dtype=float)
+
+    if y.shape != x.shape:
+        raise ValueError("x and y must have the same shape.")
+    if y.ndim != 1:
+        raise ValueError("x and y must be 1D arrays.")
+    if len(x) < 2:
+        return y.copy()
+
+    dx = np.diff(x)
+    trap = 0.5 * (y[:-1] + y[1:]) * dx
+    integral = np.concatenate(([0.0], np.cumsum(trap)))
+
+    out = np.empty_like(integral)
+
+    # avoid division by zero
+    if x[0] == 0:
+        out[0] = y[0]
+    else:
+        out[0] = integral[0] / x[0]
+
+    mask = x != 0
+    out[mask] = integral[mask] / x[mask]
+
+    return out
 
 def compute_running_averages(kappa, t, keys):
     """对指定 keys 计算 running average，并写回到 kappa 字典中。"""

@@ -1,0 +1,169 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="${GPUQ_ROOT:-$HOME/.gpuq}"
+JOBROOT="$ROOT/jobs"
+mkdir -p "$JOBROOT"
+
+ts() { date '+%F %T'; }
+jid() { printf '%s-%05d\n' "$(date '+%Y%m%d-%H%M%S')" "$RANDOM"; }
+jdir() { echo "$JOBROOT/$1"; }
+
+submit() {
+    local cmd="${1:-}"
+    [[ -n "$cmd" ]] || { echo "usage: gpuq submit '<command>'"; exit 1; }
+
+    local id dir
+    id="$(jid)"
+    dir="$(jdir "$id")"
+    mkdir -p "$dir"
+
+    printf '%s\n' "$cmd" > "$dir/cmd"
+    printf '%s\n' "$PWD" > "$dir/workdir"
+    printf 'queued\n' > "$dir/status"
+    printf '%s\n' "$(ts)" > "$dir/submit_time"
+
+    nohup "$0" worker "$id" >"$dir/worker.log" 2>&1 &
+
+    echo "$!" > "$dir/worker_pid"
+
+    echo "submitted: $id"
+}
+
+worker() {
+    local id="$1"
+    local dir cmd workdir mem_limit poll
+    dir="$(jdir "$id")"
+    cmd="$(cat "$dir/cmd")"
+    workdir="$(cat "$dir/workdir")"
+    mem_limit="${GPUQ_MEM_LIMIT:-200}"
+    poll="${GPUQ_POLL_SEC:-30}"
+
+    while true; do
+        while IFS= read -r gpu; do
+            (
+                exec {lockfd}>"/tmp/gpuq.gpu${gpu}.lock"
+                flock -n "$lockfd" || exit 99
+
+                mem="$(nvidia-smi --id="$gpu" \
+                    --query-gpu=memory.used \
+                    --format=csv,noheader,nounits | tr -d ' ')"
+
+                [[ "$mem" =~ ^[0-9]+$ ]] || exit 97
+                (( mem < mem_limit )) || exit 98
+
+                printf 'running\n' > "$dir/status"
+                printf '%s\n' "$gpu" > "$dir/gpu"
+                printf '%s\n' "$(ts)" > "$dir/start_time"
+
+                cd "$workdir"
+                export CUDA_VISIBLE_DEVICES="$gpu"
+
+                setsid bash -lc "$cmd" >"$dir/output.log" 2>&1 &
+                cpid=$!
+                printf '%s\n' "$cpid" > "$dir/pid"
+
+                wait "$cpid"
+                rc=$?
+
+                printf '%s\n' "$rc" > "$dir/exit_code"
+                printf '%s\n' "$(ts)" > "$dir/end_time"
+
+                if (( rc == 0 )); then
+                    printf 'done\n' > "$dir/status"
+                else
+                    printf 'failed\n' > "$dir/status"
+                fi
+                exit 0
+            )
+            rc=$?
+            [[ $rc -eq 0 ]] && exit 0
+        done < <(nvidia-smi --query-gpu=index --format=csv,noheader,nounits)
+
+        sleep "$poll"
+    done
+}
+
+list_jobs() {
+    printf '%-24s %-10s %-6s %-8s %s\n' JOBID STATUS GPU PID CMD
+    for dir in "$JOBROOT"/*; do
+        [[ -d "$dir" ]] || continue
+
+        id="$(basename "$dir")"
+        status="$(cat "$dir/status" 2>/dev/null || echo unknown)"
+        gpu="$(cat "$dir/gpu" 2>/dev/null || echo -)"
+        pid="$(cat "$dir/pid" 2>/dev/null || echo -)"
+        cmd="$(tr '\n' ' ' < "$dir/cmd" | cut -c1-80)"
+
+        if [[ "$status" == "running" && "$pid" != "-" ]] && ! kill -0 "$pid" 2>/dev/null; then
+            status="lost"
+        fi
+
+        printf '%-24s %-10s %-6s %-8s %s\n' "$id" "$status" "$gpu" "$pid" "$cmd"
+    done | sort
+}
+
+show_log() {
+    local id="${1:-}"
+    [[ -n "$id" ]] || { echo "usage: gpuq log <jobid>"; exit 1; }
+    tail -f "$(jdir "$id")/output.log"
+}
+
+kill_job() {
+    local id="${1:-}"
+    [[ -n "$id" ]] || { echo "usage: gpuq kill <jobid>"; exit 1; }
+
+    local dir status pid wpid
+    dir="$(jdir "$id")"
+    [[ -d "$dir" ]] || { echo "job not found: $id"; exit 1; }
+
+    status="$(cat "$dir/status" 2>/dev/null || true)"
+
+    if [[ "$status" == "queued" ]]; then
+        wpid="$(cat "$dir/worker_pid" 2>/dev/null || true)"
+        [[ -n "$wpid" ]] && kill "$wpid" 2>/dev/null || true
+        printf 'cancelled\n' > "$dir/status"
+        printf '%s\n' "$(ts)" > "$dir/end_time"
+        echo "cancelled: $id"
+        exit 0
+    fi
+
+    pid="$(cat "$dir/pid" 2>/dev/null || true)"
+    [[ -n "$pid" ]] || { echo "no pid recorded for $id"; exit 1; }
+
+    kill -TERM -- "-$pid" 2>/dev/null || kill -TERM "$pid" 2>/dev/null || true
+    printf 'killed\n' > "$dir/status"
+    printf '%s\n' "$(ts)" > "$dir/end_time"
+    echo "killed: $id"
+}
+
+show_info() {
+    local id="${1:-}"
+    [[ -n "$id" ]] || { echo "usage: gpuq info <jobid>"; exit 1; }
+    local dir
+    dir="$(jdir "$id")"
+    [[ -d "$dir" ]] || { echo "job not found: $id"; exit 1; }
+    for f in cmd status submit_time start_time end_time gpu pid exit_code workdir; do
+        [[ -f "$dir/$f" ]] && printf '%-12s %s\n' "$f" "$(cat "$dir/$f")"
+    done
+    echo "log: $dir/output.log"
+}
+
+case "${1:-}" in
+    submit) shift; submit "$*" ;;
+    worker) shift; worker "$1" ;;
+    list) list_jobs ;;
+    log) shift; show_log "$1" ;;
+    kill) shift; kill_job "$1" ;;
+    info) shift; show_info "$1" ;;
+    *)
+        cat <<EOF
+usage:
+  gpuq submit '<command>'
+  gpuq list
+  gpuq info <jobid>
+  gpuq log <jobid>
+  gpuq kill <jobid>
+EOF
+        ;;
+esac

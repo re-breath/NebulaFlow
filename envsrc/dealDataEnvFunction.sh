@@ -498,6 +498,306 @@ setup_and_save_plot()
 EOF
 }
 
+analyze_mulcrystallinity_fraction() {
+    # 用法:
+    # analyze_mulcrystallinity_fraction dump.xyz FCC HCP BCC [rmse_cutoff]
+    # 例如:
+    # analyze_mulcrystallinity_fraction dump.xyz hex_diamond sc 0.1
+
+    local crystal_type_list="OTHER FCC HCP BCC ICO SC CUBIC_DIAMOND HEX_DIAMOND GRAPHENE"
+
+    if [[ $# -lt 2 ]]; then
+        echo "Usage: analyze_mulcrystallinity_fraction <dump.xyz> <CRYSTAL_TYPE1> [CRYSTAL_TYPE2 ...] [rmse_cutoff]"
+        return 1
+    fi
+
+    local argfile="$1"
+    shift
+
+    if [[ ! -f "$argfile" ]]; then
+        echo "Error: File not found: $argfile"
+        return 1
+    fi
+
+    local rmse_cutoff="0.1"
+    local args=("$@")
+    local n=${#args[@]}
+
+    if [[ $n -lt 1 ]]; then
+        echo "Error: At least one crystal type must be provided."
+        return 1
+    fi
+
+    # 如果最后一个参数是数字，则认为它是 rmse_cutoff
+    local last_index=$((n - 1))
+    local last_arg="${args[$last_index]}"
+    if [[ "$last_arg" =~ ^[0-9]+([.][0-9]+)?([eE][-+]?[0-9]+)?$|^[.][0-9]+([eE][-+]?[0-9]+)?$ ]]; then
+        rmse_cutoff="$last_arg"
+        unset 'args[$last_index]'
+        args=("${args[@]}")
+    fi
+
+    if [[ ${#args[@]} -eq 0 ]]; then
+        echo "Error: At least one crystal type must be provided."
+        return 1
+    fi
+
+    local types_upper=()
+    local t
+    for t in "${args[@]}"; do
+        local t_upper
+        t_upper=$(echo "$t" | tr '[:lower:]' '[:upper:]')
+
+        if [[ ! $crystal_type_list =~ (^|[[:space:]])"$t_upper"($|[[:space:]]) ]]; then
+            echo "Error: $t_upper is not a valid crystal type."
+            echo "Valid crystal types are: $crystal_type_list"
+            return 1
+        fi
+
+        types_upper+=("$t_upper")
+    done
+
+    echo "Reading File: $argfile"
+    echo "Crystal Types: ${types_upper[*]}"
+    echo "Rmse Cutoff = $rmse_cutoff"
+
+    local crystal_types_joined="${types_upper[*]}"
+
+    ARGFILE="$argfile" \
+    RMSE_CUTOFF="$rmse_cutoff" \
+    CRYSTAL_TYPES="$crystal_types_joined" \
+    python3 << 'EOF'
+import os
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+import numpy as np
+from ovito.io import import_file
+from ovito.modifiers import PolyhedralTemplateMatchingModifier
+
+file_pattern = os.environ["ARGFILE"]
+rmse_cutoff = float(os.environ["RMSE_CUTOFF"])
+crystal_types = os.environ["CRYSTAL_TYPES"].split()
+
+def save_fraction_data(frames, fractions_dict, filename):
+    cols = [frames] + [fractions_dict[ctype] for ctype in crystal_types]
+    data = np.column_stack(cols)
+    fmt = ['%d'] + ['%.6f'] * len(crystal_types)
+    header = 'Frame ' + ' '.join([f'{ctype}_fraction' for ctype in crystal_types])
+    np.savetxt(filename, data, fmt=fmt, delimiter=' ', header=header, comments='')
+    print("Data saved to", filename)
+
+def analyze_and_plot():
+    pipeline = import_file(file_pattern, multiple_frames=True)
+
+    counts = [pipeline.compute(i).particles.count for i in range(pipeline.source.num_frames)]
+    if len(set(counts)) != 1:
+        raise ValueError(f"不同帧的原子总数不一致，唯一值为: {sorted(set(counts))}")
+    total_atoms = counts[0]
+
+    ptm_modifier = PolyhedralTemplateMatchingModifier()
+    ptm_modifier.rmsd_cutoff = rmse_cutoff
+
+    for ctype in crystal_types:
+        ptm_modifier.structures[getattr(PolyhedralTemplateMatchingModifier.Type, ctype)].enabled = True
+
+    pipeline.modifiers.append(ptm_modifier)
+
+    frames = list(range(pipeline.source.num_frames))
+    fractions = {ctype: [] for ctype in crystal_types}
+
+    for frame_index in frames:
+        data = pipeline.compute(frame_index)
+        for ctype in crystal_types:
+            attr_name = f'PolyhedralTemplateMatching.counts.{ctype}'
+            count = data.attributes.get(attr_name, 0)
+            fractions[ctype].append(count / total_atoms)
+
+    base = os.path.splitext(os.path.basename(file_pattern))[0]
+    txt_name = f"{base}_mulcrystallinity_fraction.txt"
+    png_name = f"{base}_mulcrystallinity_fraction.png"
+
+    save_fraction_data(frames, fractions, txt_name)
+
+    plt.figure(figsize=(10, 5))
+    for ctype in crystal_types:
+        plt.plot(frames, fractions[ctype], 'o-', label=ctype, markersize=2)
+
+    plt.title('Crystal Fraction Over Frames')
+    plt.xlabel('Frame index')
+    plt.ylabel('Fraction of atoms')
+    plt.legend(loc='upper right')
+    plt.tight_layout()
+    plt.savefig(png_name, dpi=300)
+    print("Figure saved to", png_name)
+
+analyze_and_plot()
+EOF
+}
+
+
+analyze_allcrystallinity_fraction() {
+# 使用范围: 想要一次性分析所有的晶型演化过程
+# analyze_crystallinity_fraction dump.xyz [rmsd_cutoff] 
+# 说明:
+# 1. 自动检测所有 PTM 支持的晶型
+# 2. 只绘制“至少在某一帧中非零”的晶型
+# 3. 导出每种晶型的 frame-fraction 数据到 txt
+# 4. 导出一份汇总表 active_structures_summary.txt
+
+    local argfile="$1"
+    local rmsd_cutoff="${2:-0.1}"
+
+    if [[ -z "$argfile" ]]; then
+        echo "Usage: analyze_crystallinity_fraction <dump.xyz> [rmsd_cutoff]"
+        return 1
+    fi
+
+    if [[ ! -f "$argfile" ]]; then
+        echo "Error: file not found -> $argfile"
+        return 1
+    fi
+
+    echo "Reading File: $argfile"
+    echo "RMSD Cutoff: $rmsd_cutoff"
+
+    python3 << EOF
+import os
+import matplotlib
+matplotlib.use("Agg")
+
+import numpy as np
+import matplotlib.pyplot as plt
+from ovito.io import import_file
+from ovito.modifiers import PolyhedralTemplateMatchingModifier
+
+file_pattern = r"${argfile}"
+rmsd_cutoff = float("${rmsd_cutoff}")
+
+
+crystal_types = [
+    "FCC",
+    "HCP",
+    "BCC",
+    "ICO",
+    "SC",
+    "CUBIC_DIAMOND",
+    "HEX_DIAMOND",
+    "GRAPHENE",
+]
+
+def sanitize_label(name: str) -> str:
+    return name.lower()
+
+def export_plot_data(frames, fractions, filename: str):
+    data = np.column_stack((frames, fractions))
+    np.savetxt(filename, data, fmt=["%d", "%.8f"], delimiter=" ",
+               header="frame fraction", comments="")
+    print(f"数据已保存至: {filename}")
+
+def main():
+    pipeline = import_file(file_pattern, multiple_frames=True)
+
+    nframes = pipeline.source.num_frames
+    if nframes == 0:
+        raise ValueError("文件中没有可读取的 frame。")
+
+    counts = [pipeline.compute(i).particles.count for i in range(nframes)]
+    if len(set(counts)) != 1:
+        raise ValueError(f"不同帧的原子总数不一致，唯一值为: {sorted(set(counts))}")
+    total_atoms = counts[0]
+
+    ptm = PolyhedralTemplateMatchingModifier()
+    ptm.rmsd_cutoff = rmsd_cutoff
+
+    # 一次性启用所有需要检测的晶型
+    for ctype in crystal_types:
+        ptm.structures[getattr(PolyhedralTemplateMatchingModifier.Type, ctype)].enabled = True
+
+    pipeline.modifiers.append(ptm)
+
+    frames = list(range(nframes))
+    fraction_dict = {}
+
+    # 逐种晶型收集所有帧的数据
+    for ctype in crystal_types:
+        attr_name = f"PolyhedralTemplateMatching.counts.{ctype}"
+        c_counts = []
+
+        for frame_index in frames:
+            data = pipeline.compute(frame_index)
+            c_counts.append(data.attributes.get(attr_name, 0))
+
+        fractions = np.array(c_counts, dtype=float) / total_atoms
+        fraction_dict[ctype] = fractions
+
+    # 筛掉“全程都为 0”的晶型
+    active_types = [ctype for ctype, vals in fraction_dict.items() if np.any(vals > 0)]
+
+    base = os.path.splitext(os.path.basename(file_pattern))[0]
+
+    # 导出汇总
+    with open("active_structures_summary.txt", "w", encoding="utf-8") as f:
+        f.write(f"Input file: {file_pattern}\\n")
+        f.write(f"RMSD cutoff: {rmsd_cutoff}\\n")
+        f.write(f"Total atoms: {total_atoms}\\n")
+        f.write(f"Frames: {nframes}\\n\\n")
+
+        if active_types:
+            f.write("Structures that are not always zero:\\n")
+            for ctype in active_types:
+                vals = fraction_dict[ctype]
+                f.write(
+                    f"{ctype:16s} "
+                    f"max={vals.max():.6f} "
+                    f"mean={vals.mean():.6f} "
+                    f"final={vals[-1]:.6f}\\n"
+                )
+        else:
+            f.write("No active crystal structures found.\\n")
+
+    print("汇总已保存至: active_structures_summary.txt")
+
+    # 导出每种 active 晶型的数据
+    for ctype in active_types:
+        txt_name = f"{base}_{sanitize_label(ctype)}.txt"
+        export_plot_data(frames, fraction_dict[ctype], txt_name)
+
+    # 画图
+    plt.figure(figsize=(10, 5))
+
+    if active_types:
+        for ctype in active_types:
+            plt.plot(
+                frames,
+                fraction_dict[ctype],
+                marker="o",
+                linestyle="-",
+                linewidth=1.2,
+                markersize=2.5,
+                label=ctype
+            )
+
+        plt.legend(loc="best", fontsize=9, ncol=2)
+        title_suffix = ", ".join(active_types)
+    else:
+        # 没有任何非零晶型时，也生成一个空图避免脚本无输出
+        title_suffix = "No active structures"
+
+    plt.title(f"Crystal Structure Fractions Over Frames\\n{title_suffix}")
+    plt.xlabel("Frame index")
+    plt.ylabel("Atomic fraction")
+    plt.tight_layout()
+
+    fig_name = f"{base}_crystal_fractions.png"
+    plt.savefig(fig_name, dpi=300)
+    print(f"图像已保存至: {fig_name}")
+
+if __name__ == "__main__":
+    main()
+EOF
+}
+
 
 analysis_grains_size(){
 # 该函数使用来分析模型文件中的晶粒大小，其将会分析某种特定的晶粒类型（如FCC）的每个晶粒中该类型的原子数量，并将其保存到文件中
@@ -710,32 +1010,63 @@ find_column_max(){
         END { printf("第 %d 列的最大值为 ：%f\n", col, max) }' "$filename"
 }
 
-find_column_abs_max(){
-#检查文件指定列的绝对值最大值 使用方式为 find_column_max thermo.out 4 (检查文件第四列的最大值) 
+find_column_abs_max ()
+{
     if [[ $# -ne 2 ]]; then
-    echo "错误：需要提供文件名和列号作为参数。"
-    return 1
-    fi
-
-    filename=$1
-    column=$2
-
-    # 检查文件是否存在且可读
-    if [[ ! -f "$filename" || ! -r "$filename" ]]; then
-        echo "错误：文件 '$filename' 不存在或不可读。"
+        echo "用法：find_column_abs_max 文件名 列号"
+        echo "示例：find_column_abs_max model.xyz 8"
         return 1
     fi
-    # 验证列号是否为正整数
-    if [[ ! $column =~ ^[0-9]+$ ]]; then
-        echo "错误：列号 '$column' 必须是正整数。"
+
+    local filename="$1"
+    local column="$2"
+
+    if [[ ! -f "$filename" ]]; then
+        echo "错误：文件 '$filename' 不存在"
         return 1
     fi
-    # 使用双引号包含变量，并在 awk 脚本中安全地使用变量
-    awk -v col="$column" 'BEGIN {max=0} 
-        NR > 0 && (sqrt(($col)^2) > sqrt((max)^2)) {max=$col} 
-        END { printf("第 %d 列的绝对值最大值为：%f\n", col, max) }' "$filename"
+
+    if [[ ! $column =~ ^[1-9][0-9]*$ ]]; then
+        echo "错误：列号必须是正整数"
+        return 1
+    fi
+
+    awk -v col="$column" '
+    BEGIN {
+        max_abs = -1
+        max_val = 0
+        max_line = ""
+        max_nr = 0
+    }
+
+    NF == 0 { next }
+    NF < col { next }
+    $col !~ /^[-+]?[0-9]*\.?[0-9]+$/ { next }
+
+    {
+        current = $col
+        current_abs = (current < 0) ? -current : current
+
+        if (current_abs > max_abs) {
+            max_abs = current_abs
+            max_val = current
+            max_line = $0
+            max_nr = NR
+        }
+    }
+
+    END {
+        if (max_nr == 0) {
+            print "警告：未找到有效数字行"
+            exit
+        }
+        printf "第 %d 列绝对值最大：\n", col
+        printf "   数值：%f\n", max_val
+        printf "   行号：%d\n", max_nr
+        printf "   内容：%s\n", max_line
+    }
+    ' "$filename"
 }
-
 
 replot() {
 #该函数将指定文件的前两列进行画图
@@ -1451,6 +1782,20 @@ supercell_auto_cubic() {
     exec 3< "$HOME/.rebreath/deal_data/supercell_auto_cubic.py"
     python3 /dev/fd/3 -- "$xyzfile" "$targetnumber"
     exec 3<&-
+}
+
+
+visualize_thermo() {
+# 该函数用来可视化热力学数据
+# 使用方法：visualize_thermo.py <thermo_file>
+    local thermo_file="$1"
+    if [ -z "$thermo_file" ]; then
+        echo "Error: thermo_file is not set."
+        echo "Usage: visualize_thermo.py <thermo_file>"
+        return 1
+    fi
+    cp $HOME/.rebreath/deal_data/visualize_thermo.py .$0
+    python3 $HOME/.rebreath/deal_data/visualize_thermo.py --input $thermo_file
 }
 
 get_phonon_spectrum_mpdata(){

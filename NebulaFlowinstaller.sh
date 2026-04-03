@@ -18,6 +18,7 @@ source $HOME/.rebreath/rebreath-env-function
 ' >> "$HOME/.bashrc"
 fi
 
+chmod +x $HOME/.rebreath/gpuq
 
 echo "NebulaFlow库已经安装成功，下面请使用 source $HOME/.bashrc 命令使环境变量生效。"
 echo "The NebulaFlow library has been successfully installed. Please use the source $HOME/.bashrc command to make the environment variables take effect."

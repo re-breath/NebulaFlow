@@ -108,14 +108,22 @@ def get_descriptors(nepfile,trainfilename="train.xyz"):
     return des
 
 if __name__=="__main__":
+
+    import argparse
     
     # file_name=sys.argv[1]   #指定进行挑选的文件
     # num_samples=int(sys.argv[2])  #指定采样数量
 
-    file_name = "train_all.xyz"
-    num_samples=900
+    parser = argparse.ArgumentParser()
+    parser.add_argument('file_name', help='输入文件名')
+    parser.add_argument('num_samples', type=int, help='采样数量')
+    args = parser.parse_args()
+    file_name = args.file_name
+    num_samples = args.num_samples
+    
+
     num_intervals=30
-    nepfile="nep_all6.txt"
+    nepfile="nep.txt"
 
     atoms=ase.io.read(file_name,index=":")
     energy=read_xyz_energy(file_name)

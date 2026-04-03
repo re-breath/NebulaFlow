@@ -51,7 +51,7 @@ process_data_x() {
 }
 
 process_data_y() {
-    Ly_0=$(awk 'NR==1 {print $15}' $date_file)
+    Ly_0=$(awk 'NR==1 {print $14}' $date_file)
     output_file="stress_strain_curve.txt"
     if [ -z "$Ly_0" ]; then
         echo "Error: Ly_0 is not set."
@@ -61,7 +61,7 @@ process_data_y() {
     awk -v Ly_0="$Ly_0" ' 
         function abs(x) { return x < 0 ? -x : x; }
         {
-            strain = ($15 - Ly_0) / Ly_0
+            strain = ($14 - Ly_0) / Ly_0
             stress = $5
             stress_abs = abs(stress)
             print strain, stress_abs
