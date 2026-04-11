@@ -12,11 +12,34 @@ plt.rcParams.update({
     "legend.fontsize": 16    
 })
 
+def sample_stress_strain(strain, stress, target_points: int = 1000):
+    """
+    均匀采样应力应变数据，保证绘图效率,如果数据量过多，该函数将会对数据进行均匀采样
+    :param strain: 原始应变数组
+    :param stress: 原始应力数组
+    :param target_points: 目标采样点数（默认1000，最优）
+    :return: 筛选后的 strain, stress
+    """
+    # 获取数据总长度
+    total_points = len(strain)
+    
+    # 如果数据量 ≤ 目标点数，直接返回全部数据
+    if total_points <= target_points:
+        return strain.copy(), stress.copy()
+    
+    # 数据量过大：均匀等间隔采样（保留首尾点，曲线完整）
+    indices = np.linspace(0, total_points - 1, target_points, dtype=int)
+    # 去重（防止极端情况重复索引）
+    indices = np.unique(indices)
+    
+    return strain[indices], stress[indices]
+
 # 读取数据
 data = np.loadtxt("stress_strain_curve.txt")
 strain = data[:, 0]
 stress = data[:, 1]
 
+strain, stress = sample_stress_strain(strain, stress)
 
 import numpy as np
 from scipy.stats import linregress
@@ -74,10 +97,18 @@ tensile_strength = np.max(stress)
 tensile_index = np.argmax(stress)
 tensile_strain = strain[tensile_index]
 
-slope, intercept, r2, (i, j), rmse = best_linear_window(strain, stress,
+#该函数能用就用，不能就跳过
+try:
+    slope, intercept, r2, (i, j), rmse = best_linear_window(strain, stress,
                                                         eps_min=0.0, eps_max=0.05,
                                                         min_points=20, min_span=0.005,
                                                         r2_threshold=0.995)
+except ValueError as e:
+    print(e)
+    print("warning: No suitable linear window found.")
+    slope, intercept, r2, (i, j), rmse = 0.0, 0.0, 0.0, (0, 0), 0.0
+    
+
 youngs_modulus = slope
 linear_strain = strain[(strain >= 0.0) & (strain <= 0.05)][i:j]
 linear_stress = stress[(strain >= 0.0) & (strain <= 0.05)][i:j]

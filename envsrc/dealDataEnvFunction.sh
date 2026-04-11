@@ -572,6 +572,8 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import numpy as np
+import warnings
+warnings.filterwarnings('ignore', message=r'.*OVITO.*PyPI')
 from ovito.io import import_file
 from ovito.modifiers import PolyhedralTemplateMatchingModifier
 
@@ -634,6 +636,143 @@ def analyze_and_plot():
 analyze_and_plot()
 EOF
 }
+
+# 分析某一帧的晶粒尺寸
+analyze_crystallinity_frame_counts() {
+# 用法:
+# analyze_crystallinity_frame_counts dump.xyz [frame_index] [rmse_cutoff]
+#
+# 示例:
+# analyze_crystallinity_frame_counts dump.xyz
+#   -> 分析最后一帧, rmse_cutoff=0.1
+#
+# analyze_crystallinity_frame_counts dump.xyz 100
+#   -> 分析第100帧, rmse_cutoff=0.1
+#
+# analyze_crystallinity_frame_counts dump.xyz 100 0.08
+#   -> 分析第100帧, rmse_cutoff=0.08
+#
+# analyze_crystallinity_frame_counts dump.xyz last 0.12
+#   -> 分析最后一帧, rmse_cutoff=0.12
+
+    if [[ $# -lt 1 || $# -gt 3 ]]; then
+        echo "Usage: analyze_crystallinity_frame_counts <dump.xyz> [frame_index|last] [rmse_cutoff]"
+        return 1
+    fi
+
+    local argfile="$1"
+    local frame_arg="${2:-last}"
+    local rmse_cutoff="${3:-0.1}"
+
+    if [[ ! -f "$argfile" ]]; then
+        echo "Error: File not found: $argfile"
+        return 1
+    fi
+
+    # 校验 rmse_cutoff
+    if [[ ! "$rmse_cutoff" =~ ^[0-9]+([.][0-9]+)?([eE][-+]?[0-9]+)?$|^[.][0-9]+([eE][-+]?[0-9]+)?$ ]]; then
+        echo "Error: rmse_cutoff must be a number."
+        return 1
+    fi
+
+    # 校验 frame_arg
+    if [[ "$frame_arg" != "last" && ! "$frame_arg" =~ ^-?[0-9]+$ ]]; then
+        echo "Error: frame_index must be an integer or 'last'."
+        return 1
+    fi
+
+    echo "Reading File: $argfile"
+    echo "Frame: $frame_arg"
+    echo "Rmse Cutoff = $rmse_cutoff"
+
+    ARGFILE="$argfile" \
+    FRAME_ARG="$frame_arg" \
+    RMSE_CUTOFF="$rmse_cutoff" \
+    python3 << 'EOF'
+import os
+import warnings
+warnings.filterwarnings('ignore', message=r'.*OVITO.*PyPI')
+
+from ovito.io import import_file
+from ovito.modifiers import PolyhedralTemplateMatchingModifier
+
+file_pattern = os.environ["ARGFILE"]
+frame_arg = os.environ["FRAME_ARG"]
+rmse_cutoff = float(os.environ["RMSE_CUTOFF"])
+
+crystal_types = [
+    "OTHER",
+    "FCC",
+    "HCP",
+    "BCC",
+    "ICO",
+    "SC",
+    "CUBIC_DIAMOND",
+    "HEX_DIAMOND",
+    "GRAPHENE"
+]
+
+pipeline = import_file(file_pattern, multiple_frames=True)
+num_frames = pipeline.source.num_frames
+
+if num_frames < 1:
+    raise ValueError("轨迹中没有任何帧。")
+
+# 处理帧号
+if frame_arg == "last":
+    frame_index = num_frames - 1
+else:
+    frame_index = int(frame_arg)
+    if frame_index < 0:
+        frame_index = num_frames + frame_index  # 支持 -1 表示最后一帧
+
+if frame_index < 0 or frame_index >= num_frames:
+    raise IndexError(f"frame_index 超出范围。有效范围: 0 ~ {num_frames-1}")
+
+ptm_modifier = PolyhedralTemplateMatchingModifier()
+ptm_modifier.rmsd_cutoff = rmse_cutoff
+
+# 启用所有晶型
+for ctype in crystal_types:
+    ptm_modifier.structures[getattr(PolyhedralTemplateMatchingModifier.Type, ctype)].enabled = True
+
+pipeline.modifiers.append(ptm_modifier)
+
+data = pipeline.compute(frame_index)
+total_atoms = data.particles.count
+
+print(f"\nAnalyzing frame {frame_index}/{num_frames-1}")
+print(f"Total atoms: {total_atoms}\n")
+print(f"{'Crystal Type':<20} {'Count':>12} {'Fraction':>12}")
+print("-" * 46)
+
+results = []
+for ctype in crystal_types:
+    attr_name = f'PolyhedralTemplateMatching.counts.{ctype}'
+    count = int(data.attributes.get(attr_name, 0))
+    frac = count / total_atoms if total_atoms > 0 else 0.0
+    results.append((ctype, count, frac))
+    print(f"{ctype:<20} {count:>12d} {frac:>12.6f}")
+
+# 保存结果
+base = os.path.splitext(os.path.basename(file_pattern))[0]
+out_name = f"{base}_frame_{frame_index}_crystallinity_counts.txt"
+
+with open(out_name, "w", encoding="utf-8") as f:
+    f.write(f"File: {file_pattern}\n")
+    f.write(f"Frame index: {frame_index}\n")
+    f.write(f"Total frames: {num_frames}\n")
+    f.write(f"Total atoms: {total_atoms}\n")
+    f.write(f"RMSE cutoff: {rmse_cutoff}\n\n")
+    f.write(f"{'Crystal Type':<20} {'Count':>12} {'Fraction':>12}\n")
+    f.write("-" * 46 + "\n")
+    for ctype, count, frac in results:
+        f.write(f"{ctype:<20} {count:>12d} {frac:>12.6f}\n")
+
+print(f"\nData saved to {out_name}")
+EOF
+}
+
 
 
 analyze_allcrystallinity_fraction() {

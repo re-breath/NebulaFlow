@@ -12,13 +12,13 @@ date_file=${1:-"thermo.out"}
 # 检查data_file文件有多少列，如果不是18列那就报错
 if [ $(head -n 1 $date_file | wc -w) -ne 18 ]; then
     echo "Error: $date_file GPUMD新版本要求thermo.out必须是18列的文件，无法提取应力-应变曲线/n请检查文件格式是否正确，或者是否是旧版本的thermo.out文件"
-    exit 1
 fi
 
 flag=0
 
 check_directory_name() {
-    dir_name=$(basename "$(pwd)")
+    #dir_name=$(basename "$(pwd)")
+    dir_name=$(pwd)
 
     # 使用正则表达式检查名称下划线后的第一个字母是否为x、y或z
     if [[ $dir_name =~ _([xyz]) ]]; then

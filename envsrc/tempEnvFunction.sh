@@ -554,3 +554,202 @@ check_dump_hex_lastcol() {
         fi
     done
 }
+
+
+# 该函数将会对thermo.out文件进行画图，分析出平均压强，体积变化率，偏应力等信息
+analyze_thermo_out() {
+    # 用法:
+    #   analyze_thermo_out thermo.out [thermo_every] [thermo_first_step]
+    #
+    # 例如:
+    #   analyze_thermo_out thermo.out 100 100
+    #
+    # 输出:
+    #   thermo_analysis_data.txt
+    #   thermo_analysis_3panel.png
+    #
+    # 说明:
+    #   thermo.out 无表头，列定义为：
+    #   1:T 2:K 3:U 4:Pxx 5:Pyy 6:Pzz 7:Pyz 8:Pxz 9:Pxy
+    #   10:ax 11:ay 12:az 13:bx 14:by 15:bz 16:cx 17:cy 18:cz
+
+    local thermo_file="${1:-thermo.out}"
+    local thermo_every="${2:-100}"
+    local thermo_first_step="${3:-100}"
+
+    if [[ ! -f "$thermo_file" ]]; then
+        echo "Error: File not found: $thermo_file"
+        return 1
+    fi
+
+    python3 - "$thermo_file" "$thermo_every" "$thermo_first_step" << 'PY'
+import sys
+from pathlib import Path
+import numpy as np
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+
+thermo_file = Path(sys.argv[1])
+thermo_every = int(sys.argv[2])
+thermo_first_step = int(sys.argv[3])
+
+# =========================
+# 读取 thermo.out
+# =========================
+rows = []
+with thermo_file.open("r", encoding="utf-8", errors="ignore") as f:
+    for line in f:
+        line = line.strip()
+        if not line:
+            continue
+        parts = line.split()
+        if len(parts) < 18:
+            continue
+        try:
+            rows.append([float(x) for x in parts])
+        except ValueError:
+            continue
+
+if len(rows) == 0:
+    raise ValueError(f"No valid data found in {thermo_file}")
+
+data = np.array(rows, dtype=float)
+
+# =========================
+# 取出应力分量
+# 注意：
+# thermo.out 列从 1 开始计数
+# Python 下标从 0 开始
+# 4:Pxx 5:Pyy 6:Pzz 7:Pyz 8:Pxz 9:Pxy
+# => 3,4,5,6,7,8
+# =========================
+pxx = data[:, 3]
+pyy = data[:, 4]
+pzz = data[:, 5]
+pyz = data[:, 6]
+pxz = data[:, 7]
+pxy = data[:, 8]
+
+# =========================
+# 计算体积
+# 晶胞体积 V = |a · (b × c)|
+# a=(10,11,12), b=(13,14,15), c=(16,17,18)
+# Python 下标 => a=(9,10,11), b=(12,13,14), c=(15,16,17)
+# =========================
+a = data[:, 9:12]
+b = data[:, 12:15]
+c = data[:, 15:18]
+
+volumes = np.abs(np.einsum("ij,ij->i", a, np.cross(b, c)))
+v0 = volumes[0]
+
+# 你指定要画的量：(Vt - V0) / V0
+rel_volume_change = (volumes - v0) / v0
+
+# =========================
+# 平均压强
+# 压缩时通常希望画成正值，所以取负号
+# P = -(Pxx + Pyy + Pzz)/3
+# =========================
+p_avg = -(pxx + pyy + pzz) / 3.0
+
+# =========================
+# 偏应力
+# 先构造偏应力张量:
+# s_ij = sigma_ij - mean(sigma)*delta_ij
+#
+# 这里采用等效偏应力（类似 von Mises）
+# q = sqrt( ((sxx-syy)^2 + (syy-szz)^2 + (szz-sxx)^2 + 6*(sxy^2+syz^2+sxz^2))/2 )
+#
+# 对应路径研究中，这是一个很有用的“非静水性”指标
+# =========================
+mean_normal = (pxx + pyy + pzz) / 3.0
+sxx = pxx - mean_normal
+syy = pyy - mean_normal
+szz = pzz - mean_normal
+sxy = pxy
+syz = pyz
+sxz = pxz
+
+deviatoric_q = np.sqrt(
+    (
+        (sxx - syy)**2 +
+        (syy - szz)**2 +
+        (szz - sxx)**2 +
+        6.0 * (sxy**2 + syz**2 + sxz**2)
+    ) / 2.0
+)
+
+# =========================
+# 横轴 step
+# =========================
+n = len(volumes)
+steps = thermo_first_step + np.arange(n) * thermo_every
+
+# =========================
+# 导出数据
+# =========================
+out_txt = thermo_file.with_name("thermo_analysis_data.txt")
+header = "step volume rel_volume_change pressure_avg deviatoric_q"
+np.savetxt(
+    out_txt,
+    np.column_stack([steps, volumes, rel_volume_change, p_avg, deviatoric_q]),
+    fmt=["%d", "%.10f", "%.10f", "%.10f", "%.10f"],
+    header=header,
+    comments=""
+)
+
+# =========================
+# 画图：三联图
+# =========================
+fig, axes = plt.subplots(3, 1, figsize=(7.5, 9.0), sharex=True)
+
+# 图1：相对体积变化
+axes[0].plot(steps, rel_volume_change, linewidth=1.2)
+axes[0].set_ylabel(r'$(V_t - V_0)/V_0$')
+axes[0].set_title(thermo_file.parent.name)
+
+# 图2：平均压强
+axes[1].plot(steps, p_avg, linewidth=1.2)
+axes[1].set_ylabel('Average pressure')
+
+# 图3：偏应力
+axes[2].plot(steps, deviatoric_q, linewidth=1.2)
+axes[2].set_ylabel('Deviatoric stress')
+axes[2].set_xlabel('Step')
+
+for ax in axes:
+    ax.tick_params(direction="in")
+    ax.grid(False)
+
+fig.tight_layout()
+
+out_png = thermo_file.with_name("thermo_analysis_3panel.png")
+fig.savefig(out_png, dpi=300, bbox_inches="tight")
+plt.close(fig)
+
+print(f"Data saved to: {out_txt}")
+print(f"Figure saved to: {out_png}")
+PY
+}
+
+deal_AlN_diff_axis_deform(){
+# 处理AlN不同轴的形变数据
+
+    initpath=$PWD; export -f analyze_mulcrystallinity_fraction; find ./ -name "dump.xyz" | while read -r i; do
+    dir=$(dirname "$i")
+    cd "$dir" || continue
+    bash -c "analyze_mulcrystallinity_fraction  dump.xyz sc" &
+    cd "$initpath"
+    done
+
+    find ./ -name "dump_mulcrystallinity_fraction.txt" | while read -r file; do
+    # 直接读取文件最后一行第二列，不切换目录，绝对不报错
+    num=$(awk 'END{print $2}' "$file")
+    num=${num:-0}
+    # 在文件所在目录生成标记
+    touch "$(dirname "$file")/lastsc:$num"
+    echo "已生成: $(dirname "$file")/lastsc:$num"
+    done
+}

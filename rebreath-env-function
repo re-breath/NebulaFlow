@@ -116,6 +116,24 @@ nohup_free_time_run(){
     nohup free_time_run "$1" 2>&1 &
 }
 
+pwdxcd() {
+# 切换到指定进程的工作目录，自动处理空格、异常、权限
+    if [ $# -ne 1 ]; then
+        echo "用法: pwdxcd <PID>"
+        return 1
+    fi
+
+    local dir
+    dir=$(pwdx "$1" 2>/dev/null | awk -F ': ' '{print $2}')
+
+    if [ -z "$dir" ] || [ ! -d "$dir" ]; then
+        echo "错误：无法获取进程 $1 的有效工作目录"
+        return 1
+    fi
+
+    cd -- "$dir"
+}
+
 relib() {
 # rebreath库的管理员   
 #示例使用方式 relib -v -m hp pre sh
