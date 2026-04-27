@@ -107,6 +107,28 @@ compare_folders() {
     done
 }
 
+# 该函数用来将markdown文件转换为rich格式的文本，可在linux终端直接查看
+catmd() {
+    local mdfile="${1:-README.md}"
+
+    if [[ ! -f "$mdfile" ]]; then
+        echo "File not found: $mdfile" >&2
+        return 1
+    fi
+
+    python3 - "$mdfile" <<'PY'
+import sys
+from rich.console import Console
+from rich.markdown import Markdown
+
+console = Console()
+mdfile = sys.argv[1]
+
+with open(mdfile, "r", encoding="utf-8") as f:
+    console.print(Markdown(f.read()))
+PY
+}
+
 # 该函数用来将多个png文件合并为一个pdf文件
 # 依赖安装：pip install pillow
 png2pdf() {

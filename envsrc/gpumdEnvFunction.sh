@@ -414,6 +414,33 @@ start_gpumd(){
     fi
 }
 
+check_dataset_quality(){
+#使用该函数检查数据集的质量
+    python3 $HOME/.rebreath/deal_data/dataset_quality_diagnosis.py $@
+
+    echo "数据集质量检查完成"
+}
+
+compare_nepdata() {
+    local train_file="${1:-train.xyz}"
+    local test_file="${2:-test.xyz}"
+    local num_train=""
+    local num_test=""
+
+    [[ -e "$train_file" ]] || echo "warning: 训练集文件不存在: $train_file" >&2
+    [[ -e "$test_file"  ]] || echo "warning: 测试集文件不存在: $test_file" >&2
+
+    if declare -F get_configs_num >/dev/null; then
+        [[ -r "$train_file" ]] && num_train=$(get_configs_num "$train_file" 2>/dev/null)
+        [[ -r "$test_file"  ]] && num_test=$(get_configs_num "$test_file" 2>/dev/null)
+    else
+        echo "warning: get_configs_num 未定义，无法统计构型数" >&2
+    fi
+
+    echo "训练集数据有 ${num_train:-未知} 个"
+    echo "测试集数据有 ${num_test:-未知} 个"
+}
+
 get_energy(){
 #获得xyz文件中的所有的能量
 #grep "attice" $xyz_file |  grep -oE '\b\w+="[^"]+"|\b\w+=[^ ]+\b' |grep 'energy'

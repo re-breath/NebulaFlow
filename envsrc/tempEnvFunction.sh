@@ -736,16 +736,14 @@ PY
 
 deal_AlN_diff_axis_deform(){
 # 处理AlN不同轴的形变数据
-
-    initpath=$PWD; export -f analyze_mulcrystallinity_fraction; find ./ -name "dump.xyz" | while read -r i; do
+    initpath=$PWD; export -f analyze_mulcrystallinity_fraction; export -f analyze_thermo_out; find ./ -name "dump.xyz" | while read -r i; do
     dir=$(dirname "$i")
     cd "$dir" || continue
-    bash -c "analyze_mulcrystallinity_fraction  dump.xyz sc" &
+    bash -c "analyze_mulcrystallinity_fraction  dump.xyz sc ; analyze_thermo_out" &
     cd "$initpath"
     done
 
     find ./ -name "dump_mulcrystallinity_fraction.txt" | while read -r file; do
-    # 直接读取文件最后一行第二列，不切换目录，绝对不报错
     num=$(awk 'END{print $2}' "$file")
     num=${num:-0}
     # 在文件所在目录生成标记
@@ -753,3 +751,4 @@ deal_AlN_diff_axis_deform(){
     echo "已生成: $(dirname "$file")/lastsc:$num"
     done
 }
+

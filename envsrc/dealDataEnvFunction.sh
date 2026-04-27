@@ -439,7 +439,8 @@ analyze_crystallinity_fraction() {
     python3 << EOF
 import matplotlib
 matplotlib.use('Agg')
-
+import warnings
+warnings.filterwarnings('ignore', message=r'.*OVITO.*PyPI')
 import matplotlib.pyplot as plt
 import numpy as np
 from ovito.io import import_file
@@ -804,7 +805,8 @@ analyze_allcrystallinity_fraction() {
 import os
 import matplotlib
 matplotlib.use("Agg")
-
+import warnings
+warnings.filterwarnings('ignore', message=r'.*OVITO.*PyPI')
 import numpy as np
 import matplotlib.pyplot as plt
 from ovito.io import import_file
@@ -956,6 +958,8 @@ analysis_grains_size(){
     fi
 
     python3 << EOF
+import warnings
+warnings.filterwarnings('ignore', message=r'.*OVITO.*PyPI')
 import ovito
 from ovito.modifiers import *
 import numpy as np

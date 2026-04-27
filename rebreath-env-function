@@ -86,25 +86,25 @@ find_nohup_task(){
     ps aux | grep -E "($string)" | grep -v grep
 }
 
-free_time_run() {
-# 监测到空闲的gpu后进行任务
-# 使用案例 free_time_run 'nohup gpumd 2>&1 &'
-  while true; do
-    for gpu_id in $(nvidia-smi --query-gpu=index --format=csv,noheader,nounits); do
-      mem_used=$(nvidia-smi --id=$gpu_id --query-gpu=memory.used --format=csv,noheader,nounits)
-      if [ $mem_used -lt 200 ]; then
-          export CUDA_VISIBLE_DEVICES=$gpu_id
-          echo "Running task on GPU $gpu_id"
-          eval $1
-          break 2
-      fi
-      done
-      echo "No free GPU found, waiting..."
-      sleep 60
-  done
-  date '+%Y-%m-%d %H:%M:%S' >> run_train-file.log
-  echo -e "执行 $1 \n" >> run_train-file.log    
-}
+# free_time_run() {
+# # 监测到空闲的gpu后进行任务
+# # 使用案例 free_time_run 'nohup gpumd 2>&1 &'
+#   while true; do
+#     for gpu_id in $(nvidia-smi --query-gpu=index --format=csv,noheader,nounits); do
+#       mem_used=$(nvidia-smi --id=$gpu_id --query-gpu=memory.used --format=csv,noheader,nounits)
+#       if [ $mem_used -lt 200 ]; then
+#           export CUDA_VISIBLE_DEVICES=$gpu_id
+#           echo "Running task on GPU $gpu_id"
+#           eval $1
+#           break 2
+#       fi
+#       done
+#       echo "No free GPU found, waiting..."
+#       sleep 60
+#   done
+#   date '+%Y-%m-%d %H:%M:%S' >> run_train-file.log
+#   echo -e "执行 $1 \n" >> run_train-file.log    
+# }
 
 search_large_files() {
 # 搜索当前目录下所有大于20GB的文件
@@ -429,4 +429,160 @@ wc_file_lines() {
     echo "Total lines in all specified files:"
     find . -type f \( "${find_args[@]}" \) -exec wc -l {} + | \
         tail -n 1 | awk '{print $1}'
+}
+
+# ─────────────────────────────────────────────────────────────────
+# pfrun — Parallel Find & Run
+# 在当前目录递归查找指定文件，进入其所在目录并行执行命令
+#
+# 用法：
+#   pfrun <文件名模式> <命令> [选项]
+#
+# 常用选项：
+#   --jobs N        并发数（默认自动检测 CPU 核数）
+#   --search-dir D  指定搜索根目录（默认当前目录）
+#   --dry-run       预览将执行的命令，不实际运行
+#   --quiet         不打印子任务输出，只显示进度条
+#
+# 示例：
+#   pfrun "dump.xyz" "analyze_thermo_out"
+#   pfrun "dump.xyz" "analyze_thermo_out" --jobs 8
+#   pfrun "*.lammps" "lmp -in {FILE}"      # {FILE} 替换为文件名
+#   pfrun "dump.xyz" "analyze_thermo_out" --dry-run
+# ─────────────────────────────────────────────────────────────────
+pfrun() {
+    bash ~/.rebreath/deal_data/parallel_find_run.sh "$@"
+}
+
+
+
+free_gpu_run() {
+    local __pid_var="$1"; shift
+    local cmd="$*"
+    local lock_dir="/tmp/gpumd_gpu_locks"
+    local mem_threshold_mb="${GPU_FREE_MEM_THRESHOLD_MB:-500}"
+    local util_threshold="${GPU_FREE_UTIL_THRESHOLD:-10}"
+    local sleep_seconds="${GPU_WAIT_INTERVAL:-20}"
+    mkdir -p "$lock_dir"
+
+    while true; do
+        local gpu_id
+        for gpu_id in $(nvidia-smi --query-gpu=index --format=csv,noheader,nounits | shuf); do
+            local lock_file="${lock_dir}/gpu_${gpu_id}.lock"
+            local mem_used util pids
+
+            mem_used=$(nvidia-smi --query-gpu=memory.used    --format=csv,noheader,nounits -i "$gpu_id" 2>/dev/null | awk '{print int($1)}')
+            util=$(    nvidia-smi --query-gpu=utilization.gpu --format=csv,noheader,nounits -i "$gpu_id" 2>/dev/null | awk '{print int($1)}')
+            pids=$(    nvidia-smi --query-compute-apps=pid    --format=csv,noheader,nounits -i "$gpu_id" 2>/dev/null | sed '/^[[:space:]]*$/d' | xargs)
+
+            [ -n "$mem_used" ] || continue
+            [ -n "$util"     ] || continue
+            [ "$mem_used" -lt "$mem_threshold_mb" ] || continue
+            [ "$util"     -lt "$util_threshold"   ] || continue
+            [ -z "$pids" ]                           || continue
+
+            exec {lock_fd}> "$lock_file" || continue
+            flock -n "$lock_fd" || { eval "exec ${lock_fd}>&-"; continue; }
+
+            mem_used=$(nvidia-smi --query-gpu=memory.used    --format=csv,noheader,nounits -i "$gpu_id" 2>/dev/null | awk '{print int($1)}')
+            util=$(    nvidia-smi --query-gpu=utilization.gpu --format=csv,noheader,nounits -i "$gpu_id" 2>/dev/null | awk '{print int($1)}')
+            pids=$(    nvidia-smi --query-compute-apps=pid    --format=csv,noheader,nounits -i "$gpu_id" 2>/dev/null | sed '/^[[:space:]]*$/d' | xargs)
+            if [ -z "$mem_used" ] || [ -z "$util" ] || \
+               [ "$mem_used" -ge "$mem_threshold_mb" ] || \
+               [ "$util"     -ge "$util_threshold"   ] || [ -n "$pids" ]; then
+                flock -u "$lock_fd"; eval "exec ${lock_fd}>&-"; continue
+            fi
+
+            (
+                export CUDA_VISIBLE_DEVICES="$gpu_id"
+                echo "$gpu_id"  > gpu.id
+                echo "$BASHPID" > gpumd_bash.pid
+                exec setsid bash -lc "$cmd"
+            ) &
+            local job_pid=$!
+            echo "$job_pid" > launcher.pid
+
+            sleep 0.2
+            if ! kill -0 "$job_pid" 2>/dev/null; then
+                flock -u "$lock_fd"; eval "exec ${lock_fd}>&-"; continue
+            fi
+         ( wait "$job_pid"; flock -u "$lock_fd"; eval "exec ${lock_fd}>&-"; rm -f "$lock_file" ) &
+
+
+            printf -v "$__pid_var" '%s' "$job_pid"
+
+            echo "$(date '+%Y-%m-%d %H:%M:%S') GPU=${gpu_id} CMD=${cmd}" >> "${GPU_LOG_FILE:-gpumd_run.log}"
+
+            return 0
+        done
+        echo "No free GPU found, waiting ${sleep_seconds}s..." >&2
+        sleep "$sleep_seconds"
+    done
+}
+
+free_time_run() {
+    local cmd="$1"
+    local log_file="run_train-file.log"
+    ts() { date '+%Y-%m-%d %H:%M:%S'; }  # 普通函数，无 local
+
+    if [ -z "$cmd" ]; then
+        echo "[$(ts)] [ERROR] 未提供命令，用法: free_time_run 'nohup gpumd 2>&1 &'"
+        return 1
+    fi
+
+    echo "[$(ts)] [INFO] free_time_run 启动，目标命令: $cmd" | tee -a "$log_file"
+    echo "[$(ts)] [INFO] 开始轮询 GPU 空闲状态（阈值 < 200 MiB）..." | tee -a "$log_file"
+
+    while true; do
+        for gpu_id in $(nvidia-smi --query-gpu=index --format=csv,noheader,nounits); do
+            mem_used=$(nvidia-smi --id=$gpu_id --query-gpu=memory.used --format=csv,noheader,nounits)
+            echo "[$(ts)] [CHECK] GPU $gpu_id 显存占用: ${mem_used} MiB" | tee -a "$log_file"
+
+            if [ "$mem_used" -lt 200 ]; then
+                export CUDA_VISIBLE_DEVICES=$gpu_id
+                echo "[$(ts)] [INFO] GPU $gpu_id 空闲，准备执行任务" | tee -a "$log_file"
+                echo "[$(ts)] [RUN]  执行命令: $cmd" | tee -a "$log_file"
+
+                eval "$cmd"
+                local exit_code=$?
+
+                if [ $exit_code -eq 0 ]; then
+                    echo "[$(ts)] [OK]   命令已提交，exit code: $exit_code" | tee -a "$log_file"
+                else
+                    echo "[$(ts)] [WARN] 命令退出码异常: $exit_code" | tee -a "$log_file"
+                fi
+
+                echo "[$(ts)] [DONE] GPU=$gpu_id CMD=$cmd EXIT=$exit_code" >> "$log_file"
+                echo "---" >> "$log_file"
+                break 2
+            fi
+        done
+
+        echo "[$(ts)] [WAIT] 无空闲 GPU，60s 后重试..." | tee -a "$log_file"
+        sleep 60
+    done
+}
+
+
+wait_and_run () {
+# 监控指定 PID 进程，等待其结束，然后执行指定命令
+    local pid=$1
+    local cmd=${2}
+    local interval=${3:-60}
+
+    if [ -z "$pid" ]; then
+        echo "用法: wait_and_run <PID> [命令] [检查间隔秒数]"
+        return 1
+    fi
+
+    echo "开始监控 PID $pid，每 ${interval}s 检查一次..."
+    echo "目标命令: $cmd"
+
+    while kill -0 "$pid" 2>/dev/null; do
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] PID $pid 仍在运行，等待中..."
+        sleep "$interval"
+    done
+
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] PID $pid 已结束，开始排队运行续跑任务..."
+    free_time_run "$cmd"
 }
