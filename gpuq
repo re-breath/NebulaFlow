@@ -1,14 +1,34 @@
 #!/usr/bin/env bash
+# ======================================================================
+# File:         gpuq
+# Project:      NebulaFlow
+# Description:  GPU队列管理器 - 在空闲GPU上按队列顺序执行计算任务
+#               GPU queue manager - submit commands to execute on free GPUs
+#               with automatic scheduling and job persistence.
+# Author:       rebreath
+# Dependencies: nvidia-smi, bash >= 4.0, flock
+# ======================================================================
+
 set -euo pipefail
 
 ROOT="${GPUQ_ROOT:-$HOME/.gpuq}"
 JOBROOT="$ROOT/jobs"
 mkdir -p "$JOBROOT"
 
+# Helper: timestamp
 ts() { date '+%F %T'; }
+
+# Helper: generate unique job ID
 jid() { printf '%s-%05d\n' "$(date '+%Y%m%d-%H%M%S')" "$RANDOM"; }
+
+# Helper: get job directory
 jdir() { echo "$JOBROOT/$1"; }
 
+# ---------------------------------------------------------------------------
+# submit — 提交任务到队列 / Submit a job to the queue
+# Usage:    gpuq submit '<command>'
+# Stores the command in a job directory and launches a background worker.
+# ---------------------------------------------------------------------------
 submit() {
     local cmd="${1:-}"
     [[ -n "$cmd" ]] || { echo "usage: gpuq submit '<command>'"; exit 1; }
@@ -23,13 +43,20 @@ submit() {
     printf 'queued\n' > "$dir/status"
     printf '%s\n' "$(ts)" > "$dir/submit_time"
 
+    # Launch background worker for this job
     nohup "$0" worker "$id" >"$dir/worker.log" 2>&1 &
-
     echo "$!" > "$dir/worker_pid"
 
     echo "submitted: $id"
 }
 
+# ---------------------------------------------------------------------------
+# worker — 后台任务执行器 / Background worker for a single job
+# Polls all GPUs until one meets the idle criteria, then executes the command.
+# Env vars:
+#   GPUQ_MEM_LIMIT   - GPU memory threshold in MiB (default: 200)
+#   GPUQ_POLL_SEC    - Polling interval in seconds (default: 30)
+# ---------------------------------------------------------------------------
 worker() {
     local id="$1"
     local dir cmd workdir mem_limit poll
@@ -42,6 +69,7 @@ worker() {
     while true; do
         while IFS= read -r gpu; do
             (
+                # Acquire per-GPU lock to prevent racing
                 exec {lockfd}>"/tmp/gpuq.gpu${gpu}.lock"
                 flock -n "$lockfd" || exit 99
 
@@ -84,6 +112,12 @@ worker() {
     done
 }
 
+# ---------------------------------------------------------------------------
+# list — 列出所有任务 / List all jobs
+# Usage:    gpuq list
+# Shows job ID, status, GPU, PID, and command for all submitted jobs.
+# Status: queued | running | done | failed | killed | cancelled | lost
+# ---------------------------------------------------------------------------
 list_jobs() {
     printf '%-24s %-10s %-6s %-8s %s\n' JOBID STATUS GPU PID CMD
     for dir in "$JOBROOT"/*; do
@@ -95,6 +129,7 @@ list_jobs() {
         pid="$(cat "$dir/pid" 2>/dev/null || echo -)"
         cmd="$(tr '\n' ' ' < "$dir/cmd" | cut -c1-80)"
 
+        # Detect lost jobs
         if [[ "$status" == "running" && "$pid" != "-" ]] && ! kill -0 "$pid" 2>/dev/null; then
             status="lost"
         fi
@@ -103,12 +138,21 @@ list_jobs() {
     done | sort
 }
 
+# ---------------------------------------------------------------------------
+# log — 查看任务输出日志 / Tail a job's output log
+# Usage:    gpuq log <jobid>
+# ---------------------------------------------------------------------------
 show_log() {
     local id="${1:-}"
     [[ -n "$id" ]] || { echo "usage: gpuq log <jobid>"; exit 1; }
     tail -f "$(jdir "$id")/output.log"
 }
 
+# ---------------------------------------------------------------------------
+# kill — 终止任务 / Kill a job
+# Usage:    gpuq kill <jobid>
+# Sends TERM to the job's process group; kills the worker for queued jobs.
+# ---------------------------------------------------------------------------
 kill_job() {
     local id="${1:-}"
     [[ -n "$id" ]] || { echo "usage: gpuq kill <jobid>"; exit 1; }
@@ -137,6 +181,10 @@ kill_job() {
     echo "killed: $id"
 }
 
+# ---------------------------------------------------------------------------
+# info — 查看任务详细信息 / Show job details
+# Usage:    gpuq info <jobid>
+# ---------------------------------------------------------------------------
 show_info() {
     local id="${1:-}"
     [[ -n "$id" ]] || { echo "usage: gpuq info <jobid>"; exit 1; }
@@ -149,6 +197,7 @@ show_info() {
     echo "log: $dir/output.log"
 }
 
+# Main dispatch
 case "${1:-}" in
     submit) shift; submit "$*" ;;
     worker) shift; worker "$1" ;;
@@ -159,11 +208,11 @@ case "${1:-}" in
     *)
         cat <<EOF
 usage:
-  gpuq submit '<command>'
-  gpuq list
-  gpuq info <jobid>
-  gpuq log <jobid>
-  gpuq kill <jobid>
+  gpuq submit '<command>'    Submit a job to the queue
+  gpuq list                  List all jobs and their status
+  gpuq info <jobid>          Show detailed job info
+  gpuq log <jobid>           Tail job output log
+  gpuq kill <jobid>          Kill/Cancel a job
 EOF
         ;;
 esac

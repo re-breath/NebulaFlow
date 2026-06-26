@@ -1,177 +1,91 @@
-#rebreath的函数库
-#环境变量部分的函数
-#+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+# ======================================================================
+# File:         rebreath-env-function
+# Project:      NebulaFlow
+# Description:  NebulaFlow core function library - main entry point.
+#               Loads all sub-modules and environment configuration.
+# Author:       rebreath
+# Dependencies: bash >= 4.0, python3, ~/.rebreath/.config
+# ======================================================================
 
-#echo "#env setting"> ~/.rebreath/.config
+
+# =============================================================================
+# SECTION 1: Environment Setup
+# =============================================================================
+
 source ~/.rebreath/.config
 export PATH=$PATH:$HOME/.rebreath
+
 alias loadenv='source ~/.bashrc'
 alias modenv='vim ~/.bashrc'
 alias py='python3'
-export PYTHONPATH=$PYTHONPATH:$HOME/.rebreath/nebula_pylib
-#module load compiler/gcc/12.2.0 2> /dev/null || true
 alias modrenv='vim ~/.rebreath/rebreath-env-function'
+
+export PYTHONPATH=$PYTHONPATH:$HOME/.rebreath/nebula_pylib
+export OMPI_MCA_btl_base_warn_component_unused=0
 
 while IFS= read -r -d '' file; do
     source "$file"
 done < <(find ~/.rebreath/envsrc -type f -print0)
 
-# 自定义bash prompt,类似kali格式
-#export PS1="\n[\u@\h \w]\n->\$ "
 
-#关闭vasp组件未使用警告
-export OMPI_MCA_btl_base_warn_component_unused=0
+# =============================================================================
+# SECTION 2: Library Management
+# =============================================================================
 
-
-#处理数据集数据的快捷键，可以使用来处理dump文件的数据
-#修改显示的样式
-#PS1='\[\033[01;36m\]\u——>NebulaFlow:\W\[\033[01;32m\]$\[\033[01;34m\] '
-
+# Function: loadrenv
+# Usage:    loadrenv
+# Re-source NebulaFlow environment after editing.
 loadrenv(){
-#该函数用来加载NebulaFlow的环境变量
     source ~/.rebreath/rebreath-env-function
 }
 
+
+# Function: update_NebulaFlow
+# Usage:    update_NebulaFlow
+# Pull latest code from GitHub and reinstall.
+# Dependencies: git, NebulaFlowinstaller.sh
 update_NebulaFlow(){
-# 该函数使用来快速的更新NebulaFlow函数库
     local initAddress=$(pwd)
-    echo "正在更新NebulaFlow..."
+    echo "Updating NebulaFlow..."
     mkdir -p update_temp
     cd update_temp
-    git clone https://github.com/re-breath/NebulaFlow.git 
+    git clone https://github.com/re-breath/NebulaFlow.git
     cd NebulaFlow
     bash NebulaFlowinstaller.sh
     cd $initAddress
     rm -rf update_temp
-    echo "NebulaFlow更新完成！"
+    echo "NebulaFlow update complete!"
 }
 
-use_agent(){
-    export http_proxy="http://192.168.1.10:3128"
-}
 
-proxy_download() {
-#该函数的作用为使用代理节点下载文件
-    local remote_server="dhk@10.14.0.15" 
-    local remote_path="/home/dhk/rebreath/proxy_downfiles" 
-    local remote_temp_path="${remote_path}/temp" 
-
-    # 用ssh在远程服务器的临时目录创建目录并下载文件
-    ssh -i ~/.ssh/id_rsa ${remote_server} "mkdir -p ${remote_temp_path} && cd ${remote_temp_path} && $1"
-    
-    # 检查远程下载命令的返回值
-    if [[ "$?" -ne 0 ]]; then
-        echo "文件下载失败，请检查命令并重试。"
-        return 1
-    fi
-    
-    # 使用scp从临时文件夹复制所有文件到本地当前目录下
-    scp -rv -i ~/.ssh/id_rsa ${remote_server}:${remote_temp_path}/* .
-    
-    # 检查scp命令的返回值
-    if [[ "$?" -ne 0 ]]; then
-        echo "文件复制失败，请检查远程服务器上的路径和文件名。"
-        return 1
-    fi
-
-    # 清空远程服务器中的临时目录
-    ssh -i ~/.ssh/id_rsa ${remote_server} "rm -rf ${remote_temp_path}/*"
-
-    echo "文件已成功下载到本地并清理了临时文件夹。"
-}
-
-# 检查是否有正在运行的nohup任务
-find_nohup_task(){
-    string="$1"
-    ps aux | grep -E "($string)" | grep -v grep
-}
-
-# free_time_run() {
-# # 监测到空闲的gpu后进行任务
-# # 使用案例 free_time_run 'nohup gpumd 2>&1 &'
-#   while true; do
-#     for gpu_id in $(nvidia-smi --query-gpu=index --format=csv,noheader,nounits); do
-#       mem_used=$(nvidia-smi --id=$gpu_id --query-gpu=memory.used --format=csv,noheader,nounits)
-#       if [ $mem_used -lt 200 ]; then
-#           export CUDA_VISIBLE_DEVICES=$gpu_id
-#           echo "Running task on GPU $gpu_id"
-#           eval $1
-#           break 2
-#       fi
-#       done
-#       echo "No free GPU found, waiting..."
-#       sleep 60
-#   done
-#   date '+%Y-%m-%d %H:%M:%S' >> run_train-file.log
-#   echo -e "执行 $1 \n" >> run_train-file.log    
-# }
-
-search_large_files() {
-# 搜索当前目录下所有大于20GB的文件
-    find $1 -type f -size +20G
-}
-nohup_free_time_run(){
-#该函数将任务放到后台运行，并监测到空闲的gpu后进行任务
-#新增加的函数，等待检验中（）
-    nohup free_time_run "$1" 2>&1 &
-}
-
-pwdxcd() {
-# 切换到指定进程的工作目录，自动处理空格、异常、权限
-    if [ $# -ne 1 ]; then
-        echo "用法: pwdxcd <PID>"
-        return 1
-    fi
-
-    local dir
-    dir=$(pwdx "$1" 2>/dev/null | awk -F ': ' '{print $2}')
-
-    if [ -z "$dir" ] || [ ! -d "$dir" ]; then
-        echo "错误：无法获取进程 $1 的有效工作目录"
-        return 1
-    fi
-
-    cd -- "$dir"
-}
-
+# Function: relib — rebreath library file manager
+# Usage:    relib [-v] [-m] <keyword1> [keyword2] ...
+# Search ~/.rebreath/ by keywords and copy/view matching files.
+#   -v  view only
+#   -m  multi-keyword layered search
 relib() {
-# rebreath库的管理员   
-#示例使用方式 relib -v -m hp pre sh
-
     lib="$HOME/.rebreath"
     view=0
     multi=0
     args=()
 
-    # 处理参数
     while [ $# -gt 0 ]; do
         case "$1" in
-            -v)
-                view=1
-                ;;
-            -m)
-                multi=1
-                ;;
-            *)
-                args+=("$1")
-                ;;
+            -v) view=1 ;;
+            -m) multi=1 ;;
+            *)  args+=("$1") ;;
         esac
         shift
     done
 
-    # 检查是否有实际的查找关键词
     if [ ${#args[@]} -eq 0 ]; then
-        echo "请注意提供至少一个查找关键词。"
+        echo "Please provide at least one search keyword."
         exit 521
     fi
 
-    # 用于存储中间结果的文件
     tmpfile=$(mktemp)
-
-    # 初始查找
     find "$lib" -type f -name "*${args[0]}*" > "$tmpfile"
 
-    # 逐层次查找
     for keyword in "${args[@]:1}"; do
         new_tmpfile=$(mktemp)
         while IFS= read -r line; do
@@ -180,7 +94,6 @@ relib() {
         mv "$new_tmpfile" "$tmpfile"
     done
 
-    # 执行查找和相应操作
     if [ $view -eq 1 ]; then
         cat "$tmpfile"
     else
@@ -188,274 +101,236 @@ relib() {
             cp "$line" ./
         done < "$tmpfile"
     fi
-
-    # 移除临时文件
     rm -f "$tmpfile"
 }
 
 
-#+++++++++++++++++++++++++++文件操作相关工具+++++++++++++++++++++++
+# =============================================================================
+# SECTION 3: Proxy & Network
+# =============================================================================
+
+use_agent(){
+    export http_proxy="http://192.168.1.10:3128"
+}
+
+
+# Function: proxy_download
+# Usage:    proxy_download "wget http://example.com/file.tar.gz"
+# Download files via SSH proxy to local machine.
+proxy_download() {
+    local remote_server="dhk@10.14.0.15"
+    local remote_path="/home/dhk/rebreath/proxy_downfiles"
+    local remote_temp_path="${remote_path}/temp"
+
+    ssh -i ~/.ssh/id_rsa ${remote_server} "mkdir -p ${remote_temp_path} && cd ${remote_temp_path} && $1"
+
+    if [[ "$?" -ne 0 ]]; then
+        echo "Download failed; check command and retry."
+        return 1
+    fi
+
+    scp -rv -i ~/.ssh/id_rsa ${remote_server}:${remote_temp_path}/* .
+
+    if [[ "$?" -ne 0 ]]; then
+        echo "File copy failed; check remote paths."
+        return 1
+    fi
+
+    ssh -i ~/.ssh/id_rsa ${remote_server} "rm -rf ${remote_temp_path}/*"
+    echo "File downloaded successfully and temp cleaned."
+}
+
+
+# =============================================================================
+# SECTION 4: File Operations
+# =============================================================================
+
+# Function: recc  —  Record file paths to memory
+# Usage:    recc file1.txt file2.xyz
+# Record absolute paths of files for later batch operations.
 recc(){
-#创建一个临时的文件来保存指定文件的地址，方便后续对其进行操作
     local cc_tmpfile="/tmp/cc_fzmrkwjsbzz_pointer"
     for i in "$@"; do
         local fileaddress=$(realpath "$i")
         echo "$fileaddress" >> "$cc_tmpfile"
-        echo "文件 $fileaddress 已加入记忆 ……"
+        echo "File $fileaddress remembered"
     done
 }
 
+# Function: reclean  —  Clear remembered file list
+# Usage:    reclean
 reclean(){
-#清空记忆的临时文件
     local cc_tmpfile="/tmp/cc_fzmrkwjsbzz_pointer"
     if [ -f "$cc_tmpfile" ]; then
         > "$cc_tmpfile"
-        echo "记忆已清空！"
+        echo "Memory cleared!"
     fi
 }
+
+# Function: recat  —  View remembered file list
+# Usage:    recat
 recat(){
-#查看recc记忆的临时文件中的文件地址
     local cc_tmpfile="/tmp/cc_fzmrkwjsbzz_pointer"
     if [ -f "$cc_tmpfile" ]; then
         cat "$cc_tmpfile"
     else
-        echo "临时文件 $cc_tmpfile 不存在，请先运行 recc 命令。"
+        echo "Temp file not found. Run recc first."
     fi
 }
 
+# Function: revv  —  Copy remembered files to target dir
+# Usage:    revv [target_dir]
 revv(){
-    # 粘贴之前的所有记录下的文件，并且将其复制到当前的文件夹中
     local cc_tmpfile="/tmp/cc_fzmrkwjsbzz_pointer"
     local vv_dir=${1:-.}
     if [ -f "$cc_tmpfile" ]; then
         cat "$cc_tmpfile" | xargs -I {} cp -t "$vv_dir" {}
     else
-        echo "临时文件 $cc_tmpfile 不存在，请先运行 recc 命令。"
+        echo "Temp file not found. Run recc first."
     fi
 }
 
+# Function: wslcd  —  Smart cd with Windows-path detection
+# Usage:    wslcd D:\NebulaFlow
 function wslcd() {
-#检查是否有windows路径，如果有就转换为wsl-linux路径
     local wsl_dir=$1
     if [[ $wsl_dir =~ ^([a-zA-Z]):(.*)$ ]]; then
         local drive=$(echo ${BASH_REMATCH[1]} | tr '[:upper:]' '[:lower:]')
         local path=${BASH_REMATCH[2]}
         path=$(echo $path | sed 's|\\|/|g')
         local wsl_path="/mnt/${drive}${path}"
-        echo "转换后的wsl路径为：$wsl_path"
+        echo "Converted WSL path: $wsl_path"
         cd  -- "$wsl_path"
     else
         cd  -- "$wsl_dir"
     fi
 }
 
+# Function: winpath  —  Convert Windows path to WSL (output only)
+# Usage:    winpath D:\NebulaFlow
 winpath(){
-#将windows路径转换为linux路径
     local wsl_dir=$1
     if [[ $wsl_dir =~ ^([a-zA-Z]):(.*)$ ]]; then
         local drive=$(echo ${BASH_REMATCH[1]} | tr '[:upper:]' '[:lower:]')
         local path=${BASH_REMATCH[2]}
         path=$(echo $path | sed 's|\\|/|g')
         local wsl_path="/mnt/${drive}${path}"
-        echo "转换后的wsl路径为：$wsl_path"
+        echo "Converted WSL path: $wsl_path"
 fi
 }
 
-#+++++++++++++++++++++++++++数学计算相关工具++++++++++++++++++++++++++
 
+# =============================================================================
+# SECTION 5: Math & Calculation Utilities
+# =============================================================================
+
+# Function: pow  —  Integer exponentiation
+# Usage:    pow 2 10   => 1024
 pow(){
-#计算幂次方
     local base=$1
     local exp=$2
     echo $((base**exp))
 }
 
+# Function: calc_time  —  Measure command execution time
+# Usage:    calc_time "gpumd"
 calc_time(){
-#计算运行时间
     local start_time=$(date +%s%3N)
     eval "$@"
     local end_time=$(date +%s%3N)
-
     local time_diff=$((end_time-start_time))
-    echo "运行时间为： $time_diff 毫秒"
+    echo "Elapsed: $time_diff ms"
 }
 
-echo "NebulaFlow library loaded" 'O.<'
-
-#-----------------------------模板-----------------------------------
-
-
-compute_high_of_tree() {
-# 创建一个临时文件夹来保存生成的文件
-    local tmpdir=$(mktemp -d -t high_of_tree-XXXXXX)
-    
-    # 使用指定的临时文件夹
-    pushd "$tmpdir"
-    
-    # 使用shell调用c++的模板
-    cat > high_of_tree.cpp <<EOF
-    #include <iostream>
-    #include <cmath>
-    #include <numbers>
-
-    using namespace std;
-
-    void high_of_tree(){
-        const double pi  {std::numbers::pi};
-        double high {};
-        double h {};
-        double d {};
-        double angle {};
-        cout << "计算树的高度" << endl;
-        cout << "please enter h ,d ,angle：";
-        
-        cin >> h >> d >> angle;
-        cout << "h = " << h << "  d = " << d << "  angle = " << angle << endl;
-        cout << "树的高度是" << h + d * std::tan(angle * pi / 180) << endl;
-    }
-
-    int main(){
-        high_of_tree();
-        return 0;
-    }
-EOF
-
-# 编译C++代码
-g++ -std=c++20 high_of_tree.cpp -o high_of_tree
-
-# 运行程序
-./high_of_tree
-
-# 从临时文件夹中返回到原始目录
-popd
-
-# 删除临时文件夹及其内容
-rm -rf "$tmpdir"
-}
-
-
-#-----------------------------玩具-----------------------------------------------
-
-gpt9() {
-    # 开启智能对话
-    echo "hallo, 我是gpt9, 你好"
-    while true; do
-        echo -en "\e[33m$USER: \e[0m"
-        read -r line
-        case "$line" in
-            exit|Exit|EXIT)
-                echo "gpt9：再见！"
-                break
-                ;;
-            *)
-                processed_line=$(echo "$line" | sed -e 's/吗//g; s/you//g; s/?/!/g; s/^你/我/g; s/我/你/g; s/吧//g; s/？/！/g')
-                echo -e "\e[32mgpt9：\e[0m $processed_line\n"
-                ;;
-        esac
-    done
-}
-
-mycat(){
-# Ai时代,沸腾期待
-     echo "喵喵喵?(被迫营业的叫声)"
-     while true; do
-         echo -en "\e[33m$USER: \e[0m"
-         read -r line
-         if [[ "$line" == "exit" ]]; then
-             echo "(o^‥^)o mew！(不舍的叫声)"
-             break
-         fi
-
-        emojis=('◟[˳_˳]ʌ˽ʌ' '(=♡ ᆺ ♡=)' '=＾• ⋏ •＾=' '̳ ៱˳_˳៱ ̳ ∫' '＾⌤＾' '[^._.^]ﾉ彡' '/ᐠ｡ꞈ｡ᐟ\' '/ᐠ｡ꞈ｡ᐟ✿\' '✧/ᐠ-ꞈ-ᐟ\' '/ᐠ𝅒 ‸ 𝅒ᐟ\ﾉ' '—ฅ/ᐠ. ̫ .ᐟ\ฅ —' '/ᐠ_ ꞈ _ᐟ\ɴʏᴀ~' 'ฅ^•ﻌ•^ฅ' '(ฅ^･ω･^ ฅ)' '(´ฅω•ฅ｀)' '~(=^‥^)ﾉ◎～')
-
-        random_emoji=${emojis[$RANDOM % ${#emojis[@]} ]}
-         random_number=$(shuf -i 1-4 -n 1)
-         processed_line=$(printf "%0.s喵" $(seq 1 $random_number))
-         echo -e "\e[32m${random_emoji}：\e[0m $processed_line\n"
-     done
-}
-
-dirman(){
-# 查看目录下的手册
-# 使用方法：dirman /path/to/directory
-    local path=$(realpath "$1")
-    echo ""
-    echo "——>指定目录：$path"
-    cat $path/.dirlog
-    echo 'Task completed. See you later! O.<'
-    echo ""
-}
-
-wdlog(){
-# 记录目录的操作记录
-    local init=$PWD
-    local path=${1:-init}
-
-    vim "$path/.dirlog"
-}
-
+# Function: addpath  —  Add directory to PATH
+# Usage:    addpath /path/to/directory
 addpath(){
-# 添加环境变量
     local path=$(realpath "$1")
     echo "export PATH=$path"':$PATH' >> ~/.bashrc
 }
 
+# Function: wc_file_lines  —  Count code lines by extension
+# Usage:    wc_file_lines cpp h py
 wc_file_lines() {
-    # 用法: wc_file_lines cpp h
-    # 查找当前目录及其子目录下所有指定后缀的文件
-    # 统计每个文件行数，按行数倒序输出前5个文件
-    # 最后输出这些文件的总行数
-
     if [ $# -eq 0 ]; then
-        echo "用法: wc_file_lines <suffix1> [suffix2] ..."
+        echo "Usage: wc_file_lines <suffix1> [suffix2] ..."
         return 1
     fi
-
     local find_args=()
     local first=1
-
     for ext in "$@"; do
-        if [ $first -eq 1 ]; then
-            first=0
-        else
-            find_args+=(-o)
-        fi
+        if [ $first -eq 1 ]; then first=0; else find_args+=(-o); fi
         find_args+=(-name "*.$ext")
     done
-
-    find . -type f \( "${find_args[@]}" \) -exec wc -l {} + | \
-        sort -nr | head -n 6 | tail -n 5
-
+    find . -type f \( "${find_args[@]}" \) -exec wc -l {} + | sort -nr | head -n 6 | tail -n 5
     echo "Total lines in all specified files:"
-    find . -type f \( "${find_args[@]}" \) -exec wc -l {} + | \
-        tail -n 1 | awk '{print $1}'
-}
-
-# ─────────────────────────────────────────────────────────────────
-# pfrun — Parallel Find & Run
-# 在当前目录递归查找指定文件，进入其所在目录并行执行命令
-#
-# 用法：
-#   pfrun <文件名模式> <命令> [选项]
-#
-# 常用选项：
-#   --jobs N        并发数（默认自动检测 CPU 核数）
-#   --search-dir D  指定搜索根目录（默认当前目录）
-#   --dry-run       预览将执行的命令，不实际运行
-#   --quiet         不打印子任务输出，只显示进度条
-#
-# 示例：
-#   pfrun "dump.xyz" "analyze_thermo_out"
-#   pfrun "dump.xyz" "analyze_thermo_out" --jobs 8
-#   pfrun "*.lammps" "lmp -in {FILE}"      # {FILE} 替换为文件名
-#   pfrun "dump.xyz" "analyze_thermo_out" --dry-run
-# ─────────────────────────────────────────────────────────────────
-pfrun() {
-    bash ~/.rebreath/deal_data/parallel_find_run.sh "$@"
+    find . -type f \( "${find_args[@]}" \) -exec wc -l {} + | tail -n 1 | awk '{print $1}'
 }
 
 
+# =============================================================================
+# SECTION 6: Process Management
+# =============================================================================
 
+# Function: find_nohup_task
+# Usage:    find_nohup_task "gpumd"
+find_nohup_task(){
+    string="$1"
+    ps aux | grep -E "($string)" | grep -v grep
+}
+
+# Function: pwdxcd  —  cd to working dir of a PID
+# Usage:    pwdxcd <PID>
+pwdxcd() {
+    if [ $# -ne 1 ]; then
+        echo "Usage: pwdxcd <PID>"
+        return 1
+    fi
+    local dir
+    dir=$(pwdx "$1" 2>/dev/null | awk -F ': ' '{print $2}')
+    if [ -z "$dir" ] || [ ! -d "$dir" ]; then
+        echo "Error: cannot get valid working directory for PID $1"
+        return 1
+    fi
+    cd -- "$dir"
+}
+
+# Function: wait_and_run
+# Usage:    wait_and_run <PID> "command" [interval_seconds]
+# Wait for PID to finish, then execute command on free GPU.
+wait_and_run () {
+    local pid=$1
+    local cmd=${2}
+    local interval=${3:-60}
+    if [ -z "$pid" ]; then
+        echo "Usage: wait_and_run <PID> [command] [interval]"
+        return 1
+    fi
+    echo "Watching PID $pid (interval: ${interval}s)..."
+    while kill -0 "$pid" 2>/dev/null; do
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] PID $pid still running..."
+        sleep "$interval"
+    done
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] PID $pid finished. Starting follow-up..."
+    free_time_run "$cmd"
+}
+
+# Function: search_large_files
+# Usage:    search_large_files /home/user
+search_large_files() {
+    find $1 -type f -size +20G
+}
+
+
+# =============================================================================
+# SECTION 7: GPU Job Scheduling
+# =============================================================================
+
+# Function: free_gpu_run (enhanced)
+# Usage:    free_gpu_run <pid_var_name> <command>
+# Poll all GPUs, run command on first idle GPU with file-lock safety.
+# Env vars: GPU_FREE_MEM_THRESHOLD_MB(500) GPU_FREE_UTIL_THRESHOLD(10)
+#           GPU_WAIT_INTERVAL(20) GPU_LOG_FILE(gpumd_run.log)
 free_gpu_run() {
     local __pid_var="$1"; shift
     local cmd="$*"
@@ -484,6 +359,7 @@ free_gpu_run() {
             exec {lock_fd}> "$lock_file" || continue
             flock -n "$lock_fd" || { eval "exec ${lock_fd}>&-"; continue; }
 
+            # Double-check after lock
             mem_used=$(nvidia-smi --query-gpu=memory.used    --format=csv,noheader,nounits -i "$gpu_id" 2>/dev/null | awk '{print int($1)}')
             util=$(    nvidia-smi --query-gpu=utilization.gpu --format=csv,noheader,nounits -i "$gpu_id" 2>/dev/null | awk '{print int($1)}')
             pids=$(    nvidia-smi --query-compute-apps=pid    --format=csv,noheader,nounits -i "$gpu_id" 2>/dev/null | sed '/^[[:space:]]*$/d' | xargs)
@@ -508,11 +384,8 @@ free_gpu_run() {
             fi
          ( wait "$job_pid"; flock -u "$lock_fd"; eval "exec ${lock_fd}>&-"; rm -f "$lock_file" ) &
 
-
             printf -v "$__pid_var" '%s' "$job_pid"
-
             echo "$(date '+%Y-%m-%d %H:%M:%S') GPU=${gpu_id} CMD=${cmd}" >> "${GPU_LOG_FILE:-gpumd_run.log}"
-
             return 0
         done
         echo "No free GPU found, waiting ${sleep_seconds}s..." >&2
@@ -520,69 +393,157 @@ free_gpu_run() {
     done
 }
 
+
+# Function: free_time_run (simplified)
+# Usage:    free_time_run 'nohup gpumd 2>&1 &'
+# Poll GPUs until one has <200 MiB used, then execute command.
 free_time_run() {
     local cmd="$1"
     local log_file="run_train-file.log"
-    ts() { date '+%Y-%m-%d %H:%M:%S'; }  # 普通函数，无 local
+    ts() { date '+%Y-%m-%d %H:%M:%S'; }
 
     if [ -z "$cmd" ]; then
-        echo "[$(ts)] [ERROR] 未提供命令，用法: free_time_run 'nohup gpumd 2>&1 &'"
+        echo "[$(ts)] [ERROR] No command provided."
+        echo "Usage: free_time_run 'nohup gpumd 2>&1 &'"
         return 1
     fi
 
-    echo "[$(ts)] [INFO] free_time_run 启动，目标命令: $cmd" | tee -a "$log_file"
-    echo "[$(ts)] [INFO] 开始轮询 GPU 空闲状态（阈值 < 200 MiB）..." | tee -a "$log_file"
+    echo "[$(ts)] [INFO] free_time_run started. Target: $cmd" | tee -a "$log_file"
+    echo "[$(ts)] [INFO] Polling GPUs (<200 MiB threshold)..." | tee -a "$log_file"
 
     while true; do
         for gpu_id in $(nvidia-smi --query-gpu=index --format=csv,noheader,nounits); do
             mem_used=$(nvidia-smi --id=$gpu_id --query-gpu=memory.used --format=csv,noheader,nounits)
-            echo "[$(ts)] [CHECK] GPU $gpu_id 显存占用: ${mem_used} MiB" | tee -a "$log_file"
+            echo "[$(ts)] [CHECK] GPU $gpu_id memory: ${mem_used} MiB" | tee -a "$log_file"
 
             if [ "$mem_used" -lt 200 ]; then
                 export CUDA_VISIBLE_DEVICES=$gpu_id
-                echo "[$(ts)] [INFO] GPU $gpu_id 空闲，准备执行任务" | tee -a "$log_file"
-                echo "[$(ts)] [RUN]  执行命令: $cmd" | tee -a "$log_file"
-
+                echo "[$(ts)] [INFO] GPU $gpu_id idle. Executing: $cmd" | tee -a "$log_file"
                 eval "$cmd"
                 local exit_code=$?
-
                 if [ $exit_code -eq 0 ]; then
-                    echo "[$(ts)] [OK]   命令已提交，exit code: $exit_code" | tee -a "$log_file"
+                    echo "[$(ts)] [OK]   Exit: $exit_code" | tee -a "$log_file"
                 else
-                    echo "[$(ts)] [WARN] 命令退出码异常: $exit_code" | tee -a "$log_file"
+                    echo "[$(ts)] [WARN] Exit: $exit_code" | tee -a "$log_file"
                 fi
-
                 echo "[$(ts)] [DONE] GPU=$gpu_id CMD=$cmd EXIT=$exit_code" >> "$log_file"
                 echo "---" >> "$log_file"
                 break 2
             fi
         done
-
-        echo "[$(ts)] [WAIT] 无空闲 GPU，60s 后重试..." | tee -a "$log_file"
+        echo "[$(ts)] [WAIT] No free GPU. Retry in 60s..." | tee -a "$log_file"
         sleep 60
     done
 }
 
 
-wait_and_run () {
-# 监控指定 PID 进程，等待其结束，然后执行指定命令
-    local pid=$1
-    local cmd=${2}
-    local interval=${3:-60}
-
-    if [ -z "$pid" ]; then
-        echo "用法: wait_and_run <PID> [命令] [检查间隔秒数]"
-        return 1
-    fi
-
-    echo "开始监控 PID $pid，每 ${interval}s 检查一次..."
-    echo "目标命令: $cmd"
-
-    while kill -0 "$pid" 2>/dev/null; do
-        echo "[$(date '+%Y-%m-%d %H:%M:%S')] PID $pid 仍在运行，等待中..."
-        sleep "$interval"
-    done
-
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] PID $pid 已结束，开始排队运行续跑任务..."
-    free_time_run "$cmd"
+# Function: pfrun  —  Parallel Find & Run
+# Usage:    pfrun <file_pattern> <command> [--jobs N] [--dry-run] [--quiet]
+# Find files recursively and run command in each directory in parallel.
+pfrun() {
+    bash ~/.rebreath/deal_data/parallel_find_run.sh "$@"
 }
+
+
+# =============================================================================
+# SECTION 8: Directory Utilities
+# =============================================================================
+
+# Function: dirman
+# Usage:    dirman /path/to/directory
+# Read and display .dirlog file in a directory.
+dirman(){
+    local path=$(realpath "$1")
+    echo ""
+    echo "Target directory: $path"
+    cat $path/.dirlog
+    echo 'Task completed. See you later! O.<'
+    echo ""
+}
+
+# Function: wdlog
+# Usage:    wdlog [path]
+# Edit .dirlog file for a directory.
+wdlog(){
+    local init=$PWD
+    local path=${1:-init}
+    vim "$path/.dirlog"
+}
+
+
+# =============================================================================
+# SECTION 9: Template — Shell+C++ Example
+# =============================================================================
+
+# Function: compute_high_of_tree
+# Usage:    compute_high_of_tree
+# Teaching example: dynamically generate, compile and execute C++ from Shell.
+compute_high_of_tree() {
+    local tmpdir=$(mktemp -d -t high_of_tree-XXXXXX)
+    pushd "$tmpdir"
+    cat > high_of_tree.cpp <<EOF
+    #include <iostream>
+    #include <cmath>
+    #include <numbers>
+    using namespace std;
+    void high_of_tree(){
+        const double pi{std::numbers::pi};
+        double high{}, h{}, d{}, angle{};
+        cout << "Calculate tree height" << endl;
+        cout << "please enter h, d, angle: ";
+        cin >> h >> d >> angle;
+        cout << "h = " << h << "  d = " << d << "  angle = " << angle << endl;
+        cout << "Tree height = " << h + d * std::tan(angle * pi / 180) << endl;
+    }
+    int main(){ high_of_tree(); return 0; }
+EOF
+    g++ -std=c++20 high_of_tree.cpp -o high_of_tree
+    ./high_of_tree
+    popd
+    rm -rf "$tmpdir"
+}
+
+
+# =============================================================================
+# SECTION 10: Fun & Toys
+# =============================================================================
+
+# Function: gpt9  —  Simple chatbot toy
+# Usage:    gpt9  (type "exit" to quit)
+gpt9() {
+    echo "hallo, I'm gpt9!"
+    while true; do
+        echo -en "\e[33m$USER: \e[0m"
+        read -r line
+        case "$line" in
+            exit|Exit|EXIT) echo "gpt9: Bye!"; break ;;
+            *)
+                processed_line=$(echo "$line" | sed -e 's/吗//g; s/you//g; s/?/!/g; s/^你/我/g; s/我/你/g; s/吧//g; s/？/！/g')
+                echo -e "\e[32mgpt9: \e[0m $processed_line\n"
+                ;;
+        esac
+    done
+}
+
+# Function: mycat  —  Cat simulator toy
+# Usage:    mycat  (type "exit" to quit)
+mycat(){
+    echo "Meow meow? (Forced-to-work meows)"
+    while true; do
+        echo -en "\e[33m$USER: \e[0m"
+        read -r line
+        if [[ "$line" == "exit" ]]; then
+            echo "(o^‥^)o mew！"
+            break
+        fi
+        emojis=('◟[˳_˳]ʌ˽ʌ' '(=♡ ᆺ ♡=)' '=＾• ⋏ •＾=' '̳ ៱˳_˳៱ ̳ ∫' '＾⌤＾' '[^._.^]ﾉ彡' '/ᐠ｡ꞈ｡ᐟ\' '/ᐠ｡ꞈ｡ᐟ✿\' '✧/ᐠ-ꞈ-ᐟ\' '/ᐠ𝅒 ‸ 𝅒ᐟ\ﾉ' '—ฅ/ᐠ. ̫ .ᐟ\ฅ —' '/ᐠ_ ꞈ _ᐟ\ɴʏᴀ~' 'ฅ^•ﻌ•^ฅ' '(ฅ^･ω･^ ฅ)' '(´ฅω•ฅ｀)' '~(=^‥^)ﾉ◎～')
+        random_emoji=${emojis[$RANDOM % ${#emojis[@]} ]}
+        random_number=$(shuf -i 1-4 -n 1)
+        processed_line=$(printf "%0.sMeow" $(seq 1 $random_number))
+        echo -e "\e[32m${random_emoji}: \e[0m $processed_line\n"
+    done
+}
+
+
+# =============================================================================
+echo "NebulaFlow library loaded" 'O.<'

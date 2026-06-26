@@ -219,3 +219,505 @@ pdfs_to_eps_pages() {
     done
   done
 }
+
+txt2mp3() {
+  # usage:
+  #   txt2mp3 in.txt
+  #   txt2mp3 a.txt b.txt c.txt
+  #   txt2mp3 *.txt
+  #   txt2mp3 -j 4 *.txt
+  #   txt2mp3 -v zh-CN-XiaoxiaoNeural *.txt
+  #
+  # output:
+  #   in.txt -> in.mp3
+
+  python - <<'PY' "$@"
+import sys, os, asyncio, argparse
+from pathlib import Path
+
+try:
+    import edge_tts
+except ImportError:
+    print("Missing dependency: pip install edge-tts", file=sys.stderr)
+    sys.exit(1)
+
+def parse_args():
+    p = argparse.ArgumentParser(
+        prog="txt2mp3",
+        description="Convert txt files to mp3 in parallel using edge-tts."
+    )
+    p.add_argument("files", nargs="+", help="Input .txt files")
+    p.add_argument("-j", "--jobs", type=int, default=4, help="Parallel jobs, default: 4")
+    p.add_argument("-v", "--voice", default="zh-CN-XiaoxiaoNeural", help="TTS voice")
+    p.add_argument("-r", "--rate", default="+0%", help="Speech rate, e.g. +10%, -10%")
+    p.add_argument("-V", "--volume", default="+0%", help="Volume, e.g. +10%, -10%")
+    return p.parse_args()
+
+async def convert_one(path, voice, rate, volume, sem):
+    async with sem:
+        p = Path(path)
+
+        if not p.exists():
+            print(f"Skip missing file: {p}", file=sys.stderr)
+            return False
+
+        if p.is_dir():
+            print(f"Skip directory: {p}", file=sys.stderr)
+            return False
+
+        out = p.with_suffix(".mp3")
+
+        try:
+            text = p.read_text(encoding="utf-8").strip()
+        except UnicodeDecodeError:
+            text = p.read_text(encoding="utf-8-sig").strip()
+
+        if not text:
+            print(f"Skip empty file: {p}", file=sys.stderr)
+            return False
+
+        try:
+            communicate = edge_tts.Communicate(
+                text=text,
+                voice=voice,
+                rate=rate,
+                volume=volume,
+            )
+            await communicate.save(str(out))
+            print(f"Saved: {out}")
+            return True
+        except Exception as e:
+            print(f"Failed: {p} -> {e}", file=sys.stderr)
+            return False
+
+async def main():
+    args = parse_args()
+
+    if args.jobs < 1:
+        print("--jobs must be >= 1", file=sys.stderr)
+        sys.exit(2)
+
+    sem = asyncio.Semaphore(args.jobs)
+
+    tasks = [
+        convert_one(f, args.voice, args.rate, args.volume, sem)
+        for f in args.files
+    ]
+
+    results = await asyncio.gather(*tasks)
+    ok = sum(1 for x in results if x)
+
+    if ok == 0:
+        sys.exit(1)
+
+if __name__ == "__main__":
+    asyncio.run(main())
+PY
+}
+
+# 膬换为 MP3 格式
+to_mp3() {
+  if [ $# -lt 1 ]; then
+    echo "用法: to_mp3 输入文件 [输出文件.mp3]"
+    return 1
+  fi
+
+  local input="$1"
+  local output="$2"
+
+  if [ ! -f "$input" ]; then
+    echo "文件不存在: $input"
+    return 1
+  fi
+
+  if ! command -v ffmpeg >/dev/null 2>&1; then
+    echo "未找到 ffmpeg，请先安装："
+    echo "  macOS: brew install ffmpeg"
+    echo "  Ubuntu/Debian: sudo apt install ffmpeg"
+    return 1
+  fi
+
+  if [ -z "$output" ]; then
+    local base="${input%.*}"
+    output="${base}.converted.mp3"
+  fi
+
+  ffmpeg -y \
+    -i "$input" \
+    -vn \
+    -map 0:a:0 \
+    -c:a libmp3lame \
+    -b:a 128k \
+    -ar 44100 \
+    -ac 2 \
+    "$output"
+
+  echo "已转换为真正的 MP3: $output"
+}
+
+
+to_flac_light() {
+  if [ $# -lt 1 ]; then
+    echo "用法: to_flac_light 输入文件 [输出文件.flac] [模式]"
+    echo "模式:"
+    echo "  voice   默认，轻量人声：单声道 22050 Hz"
+    echo "  voice32 稍高音质人声：单声道 32000 Hz"
+    echo "  keep    尽量保持原始采样率和声道，但文件会很大"
+    return 1
+  fi
+
+  local input="$1"
+  local output="$2"
+  local mode="${3:-voice}"
+
+  if [ ! -f "$input" ]; then
+    echo "文件不存在: $input"
+    return 1
+  fi
+
+  if ! command -v ffmpeg >/dev/null 2>&1; then
+    echo "未找到 ffmpeg，请先安装："
+    echo "  macOS: brew install ffmpeg"
+    echo "  Ubuntu/Debian: sudo apt install ffmpeg"
+    return 1
+  fi
+
+  if [ -z "$output" ]; then
+    local base="${input%.*}"
+    output="${base}.light.flac"
+  fi
+
+  case "$mode" in
+    voice)
+      ffmpeg -y \
+        -i "$input" \
+        -vn \
+        -map 0:a:0 \
+        -ac 1 \
+        -ar 22050 \
+        -c:a flac \
+        -compression_level 8 \
+        "$output"
+      ;;
+    voice32)
+      ffmpeg -y \
+        -i "$input" \
+        -vn \
+        -map 0:a:0 \
+        -ac 1 \
+        -ar 32000 \
+        -c:a flac \
+        -compression_level 8 \
+        "$output"
+      ;;
+    keep)
+      ffmpeg -y \
+        -i "$input" \
+        -vn \
+        -map 0:a:0 \
+        -c:a flac \
+        -compression_level 8 \
+        "$output"
+      ;;
+    *)
+      echo "未知模式: $mode"
+      echo "可用模式: voice, voice32, keep"
+      return 1
+      ;;
+  esac
+
+  echo "已转换为 FLAC: $output"
+}
+
+
+novel_txt_to_mp3() {
+  if [ $# -lt 1 ]; then
+    echo "用法: novel_txt_to_mp3 小说.txt [输出目录] [并行数]"
+    echo "示例: novel_txt_to_mp3 book.txt ./mp3 4"
+    return 1
+  fi
+
+  local input="$1"
+  local outdir="${2:-./novel_mp3}"
+  local jobs="${3:-4}"
+
+  local voice="${TTS_VOICE:-zh-CN-XiaoxiaoNeural}"
+  local rate="${TTS_RATE:--5%}"
+  local pitch="${TTS_PITCH:-+8Hz}"
+  local volume="${TTS_VOLUME:-+0%}"
+
+  if [ ! -f "$input" ]; then
+    echo "文件不存在: $input"
+    return 1
+  fi
+
+  if ! command -v python3 >/dev/null 2>&1; then
+    echo "未找到 python3"
+    return 1
+  fi
+
+  if ! command -v edge-tts >/dev/null 2>&1; then
+    echo "未找到 edge-tts，请先安装："
+    echo "  python3 -m pip install -U edge-tts"
+    return 1
+  fi
+
+  mkdir -p "$outdir"
+
+  local tmpdir
+  tmpdir="$(mktemp -d)"
+  local chapter_dir="$tmpdir/chapters"
+  local manifest="$tmpdir/manifest.tsv"
+  mkdir -p "$chapter_dir"
+
+  python3 - "$input" "$chapter_dir" "$outdir" "$manifest" <<'PY'
+import sys
+import re
+from pathlib import Path
+
+input_file = Path(sys.argv[1])
+chapter_dir = Path(sys.argv[2])
+outdir = Path(sys.argv[3])
+manifest = Path(sys.argv[4])
+
+raw = input_file.read_bytes()
+
+text = None
+for enc in ("utf-8-sig", "utf-8", "gb18030", "gbk", "big5"):
+    try:
+        text = raw.decode(enc)
+        break
+    except UnicodeDecodeError:
+        pass
+
+if text is None:
+    raise SystemExit("无法识别 txt 编码，请先转成 UTF-8 或 GB18030")
+
+text = text.replace("\r\n", "\n").replace("\r", "\n")
+
+chapter_re = re.compile(
+    r"^\s*("
+    r"第[零一二三四五六七八九十百千万两〇0-9０-９]+[章节回卷集部篇].{0,80}"
+    r"|卷[零一二三四五六七八九十百千万两〇0-9０-９]+.{0,80}"
+    r"|Chapter\s+[0-9IVXLCDM]+.{0,80}"
+    r"|CHAPTER\s+[0-9IVXLCDM]+.{0,80}"
+    r")\s*$"
+)
+
+def safe_name(s: str, max_len: int = 50) -> str:
+    s = re.sub(r"[\\/:*?\"<>|]", "_", s)
+    s = re.sub(r"\s+", " ", s).strip()
+    s = s.strip("._ ")
+    return s[:max_len] or "untitled"
+
+lines = text.split("\n")
+chapters = []
+title = "正文"
+buf = []
+
+for line in lines:
+    stripped = line.strip()
+    if chapter_re.match(stripped):
+        if buf and "\n".join(buf).strip():
+            chapters.append((title, "\n".join(buf).strip()))
+        title = stripped
+        buf = [stripped]
+    else:
+        buf.append(line)
+
+if buf and "\n".join(buf).strip():
+    chapters.append((title, "\n".join(buf).strip()))
+
+if len(chapters) <= 1:
+    body = text.strip()
+    chunk_size = 3500
+    chapters = []
+    for i in range(0, len(body), chunk_size):
+        title = f"第{i // chunk_size + 1}段"
+        chapters.append((title, body[i:i + chunk_size]))
+
+with manifest.open("w", encoding="utf-8") as mf:
+    for idx, (title, body) in enumerate(chapters, 1):
+        name = f"{idx:02d}.{safe_name(title)}"
+        txt_path = chapter_dir / f"{name}.txt"
+        mp3_path = outdir / f"{name}.mp3"
+
+        txt_path.write_text(body, encoding="utf-8")
+        mf.write(f"{txt_path}\t{mp3_path}\n")
+
+print(f"已切分章节数: {len(chapters)}")
+PY
+
+  _tts_one_chapter() {
+    local txt="$1"
+    local mp3="$2"
+
+    if [ -s "$mp3" ]; then
+      echo "已存在，跳过: $(basename "$mp3")"
+      return 0
+    fi
+
+    echo "开始生成: $(basename "$mp3")"
+
+    edge-tts \
+      --voice "$TTS_VOICE" \
+      --rate="$TTS_RATE" \
+      --pitch="$TTS_PITCH" \
+      --volume="$TTS_VOLUME" \
+      --file "$txt" \
+      --write-media "$mp3"
+
+    local status=$?
+
+    if [ $status -ne 0 ] || [ ! -s "$mp3" ]; then
+      echo "失败: $(basename "$mp3")"
+      rm -f "$mp3"
+      return 1
+    fi
+
+    echo "完成: $(basename "$mp3")"
+    return 0
+  }
+
+  export -f _tts_one_chapter
+  export TTS_VOICE="$voice"
+  export TTS_RATE="$rate"
+  export TTS_PITCH="$pitch"
+  export TTS_VOLUME="$volume"
+
+  local fail_log="$tmpdir/fail.log"
+  : > "$fail_log"
+
+  while IFS=$'\t' read -r txt mp3; do
+    printf '%s\0%s\0' "$txt" "$mp3"
+  done < "$manifest" |
+    xargs -0 -n 2 -P "$jobs" bash -c '
+      _tts_one_chapter "$1" "$2" || echo "$2" >> "$FAIL_LOG"
+    ' _
+
+  if [ -s "$fail_log" ]; then
+    echo
+    echo "有部分章节生成失败："
+    cat "$fail_log"
+    echo
+    echo "你可以降低并行数后重试，例如："
+    echo "  novel_txt_to_mp3 \"$input\" \"$outdir\" 2"
+    rm -rf "$tmpdir"
+    return 1
+  fi
+
+  echo
+  echo "全部完成，输出目录：$outdir"
+  echo "生成文件数量：$(find "$outdir" -maxdepth 1 -type f -name '*.mp3' | wc -l)"
+
+  rm -rf "$tmpdir"
+}
+
+get_map_distance() {
+    # 该函数可以查询两地之间的距离
+    local AMAP_KEY="ebb8ae1f79a839931faafd8dcd8fdcfe"
+    
+    if [ $# -lt 1 ]; then
+        echo "使用方法:"
+        echo "  1) 查两地距离: mapdist <出发地> <目的地>"
+        echo "  2) 查当前到某地: mapdist <目的地>"
+        return 1
+    fi
+
+    local PARAM_1="$1"
+    local PARAM_2="$2"
+    local DEFAULT_CITY=""
+
+    # 如果只传了一个参数，说明 PARAM_1 是目的地，出发地需要自动定位
+    if [ -z "$PARAM_2" ]; then
+        echo "📡 未检测到出发地，正在自动定位你当前的位置..."
+    else
+        echo "正在查询 (${DEFAULT_CITY}): [$PARAM_1] 到 [$PARAM_2] ..."
+    fi
+
+    python3 - "$AMAP_KEY" "$PARAM_1" "$PARAM_2" "$DEFAULT_CITY" << 'EOF'
+import sys
+import urllib.request
+import urllib.parse
+import json
+
+key = sys.argv[1]
+p1 = sys.argv[2]
+p2 = sys.argv[3]
+city_limit = sys.argv[4]
+
+def get_current_ip_location():
+    """通过高德 IP 定位 API 获取当前位置"""
+    url = f"https://restapi.amap.com/v3/ip?key={key}"
+    try:
+        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req) as response:
+            data = json.loads(response.read().decode('utf-8'))
+            if data.get('status') == '1' and'rectangle' in data and data['rectangle']:
+                # IP 返回的是一个矩形范围(如 "116.32,39.96;116.36,39.99")，我们取中心点
+                rect = data['rectangle'].split(';')[0].split(',')
+                return f"{rect[0]},{rect[1]}", f"当前位置({data.get('city', '未知城市')})"
+    except Exception:
+        pass
+    return None, None
+
+def get_geo(address):
+    """地理编码：文字地址转经纬度"""
+    encoded_addr = urllib.parse.quote(address)
+    encoded_city = urllib.parse.quote(city_limit)
+    url = f"https://restapi.amap.com/v3/geocode/geo?key={key}&address={encoded_addr}&city={encoded_city}"
+    try:
+        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req) as response:
+            data = json.loads(response.read().decode('utf-8'))
+            if data.get('status') == '1' and data.get('geocodes'):
+                return data['geocodes'][0]['location'], data['geocodes'][0]['formatted_address']
+    except Exception:
+        pass
+    return None, None
+
+# 判断是单参数（自动定位）还是双参数
+if not p2:
+    dest_name = p1
+    ori_loc, ori_format = get_current_ip_location()
+    if not ori_loc:
+        print("❌ 自动定位失败，请手动输入出发地。")
+        sys.exit(1)
+else:
+    origin_name = p1
+    dest_name = p2
+    ori_loc, ori_format = get_geo(origin_name)
+    if not ori_loc:
+        print(f"❌ 无法解析出发地 [{origin_name}]，请确认该城市是否存在此地名。")
+        sys.exit(1)
+
+# 解析目的地
+dest_loc, dest_format = get_geo(dest_name)
+if not dest_loc:
+    print(f"❌ 无法解析目的地 [{dest_name}]。")
+    sys.exit(1)
+
+# 计算驾车距离 (type=1)
+dist_url = f"https://restapi.amap.com/v3/distance?key={key}&origins={ori_loc}&destination={dest_loc}&type=1"
+try:
+    req = urllib.request.Request(dist_url, headers={'User-Agent': 'Mozilla/5.0'})
+    with urllib.request.urlopen(req) as response:
+        res_data = json.loads(response.read().decode('utf-8'))
+        if res_data.get('status') == '1' and res_data.get('results'):
+            result = res_data['results'][0]
+            meters = float(result['distance'])
+            seconds = float(result['duration'])
+            
+            print(f"\n🚗 【高德地图查询结果 (智能定位版)】")
+            print(f"📍 出发地: {ori_format}")
+            print(f"📍 目的地: {dest_name} ({dest_format})")
+            print("--------------------------------")
+            print(f"🛣️  驾车距离: {meters/1000:.2f} 公里")
+            print(f"⏱️  预计耗时: {int(seconds//60)} 分钟 (不含严重拥堵)")
+        else:
+            print(f"❌ 距离计算失败。原因: {res_data.get('info', '未知错误')}")
+except Exception as e:
+    print(f"❌ 网络请求异常: {e}")
+EOF
+}
+alias mapdist=get_map_distance

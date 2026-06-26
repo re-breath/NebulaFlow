@@ -752,3 +752,107 @@ deal_AlN_diff_axis_deform(){
     done
 }
 
+# 提交当前目录的 LAMMPS 任务
+submit_lmp_matpl() {
+    # 1. 获取交互参数：若不传参，则默认使用 lmp.in 和 4 核
+    local lmp_input=${1:-lmp.in}
+    local corenum=${2:-4}
+
+    # 检查指定的输入文件是否存在，若不存在则提前报错拦截
+    if [ ! -f "$lmp_input" ]; then
+        echo "❌ 错误: 当前目录下未找到输入文件 [$lmp_input]！"
+        return 1
+    fi
+
+    # 2. 自动获取当前目录的名称作为作业名
+    local JOB_NAME=$(basename "$PWD")
+    local SBATCH_FILE="submit_run.sh"
+
+    echo "🚀 正在为当前目录 [$JOB_NAME] 生成并提交 Slurm 任务 (文件: $lmp_input, 核心数: $corenum)..."
+
+    # 3. 动态生成符合当前目录的 Slurm 提交脚本
+    cat << EOF > "$SBATCH_FILE"
+#!/bin/bash
+#SBATCH -p pg_g4J4
+#SBATCH -N 1
+#SBATCH --ntasks-per-node=$corenum
+#SBATCH --cpus-per-task=1
+#SBATCH -J ${JOB_NAME}
+#SBATCH -D ${PWD}
+
+module purge
+module use /public/share/pguan_group/modules
+module load python/ase-lammps-kokkos-nep
+
+echo "===== ENV CHECK ====="
+module list
+echo "Working Directory: \$PWD"
+which lmp
+echo "====================="
+
+# 运行 LAMMPS 计算（已修改为动态变量）
+mpirun -np $corenum lmp -in $lmp_input
+EOF
+
+    # 4. 提交任务并删除临时生成的 sbatch 脚本文件（保持目录干净）
+    sbatch "$SBATCH_FILE" && rm -f "$SBATCH_FILE"
+}
+
+
+# 提交当前目录的 GPUMD 任务
+submit_gpumd() {
+    # 1. 获取交互参数：若不传参，则默认输入文件为 run.in
+    local input_file=${1:-run.in}
+    
+    # 检查输入文件是否存在
+    if [ ! -f "$input_file" ]; then
+        echo "❌ 错误: 当前目录下未找到输入文件 [$input_file]！"
+        echo "💡 提示: gpumd 默认需要 run.in，如果是其他名称请指定: submit_gpumd <文件名>"
+        return 1
+    fi
+
+    # 2. 自动获取当前目录名称作为作业名
+    local JOB_NAME=$(basename "$PWD")
+    local SBATCH_FILE="submit_gpumd.sh"
+
+    echo "🚀 正在为当前目录 [$JOB_NAME] 准备 GPUMD 任务..."
+
+    # 3. 动态生成 Slurm 提交脚本
+    cat << EOF > "$SBATCH_FILE"
+#!/bin/bash
+#SBATCH -p pg_g4J4
+#SBATCH -N 1
+#SBATCH --ntasks=1
+#SBATCH --gres=gpu:1
+#SBATCH --cpus-per-task=4
+#SBATCH -J ${JOB_NAME}
+#SBATCH -D ${PWD}
+
+# 加载自定义模块路径
+module purge
+module use /public/share/pguan_group/modules
+module load gpumd/latest
+
+echo "===== ENV CHECK ====="
+module list
+echo "Working Directory: \$PWD"
+which gpumd
+echo "====================="
+
+# 运行 GPUMD
+# 注意：如果输入文件不是默认的 run.in，gpumd 通常需要重定向或通过特定方式指定
+# 但标准 gpumd 默认直接读取当前目录下的 run.in
+if [ "$input_file" != "run.in" ]; then
+    echo "⚠️ 警告: gpumd 通常默认读取 run.in。当前指定为 $input_file，尝试链接..."
+    ln -sf $input_file run.in
+fi
+
+gpumd
+EOF
+
+    # 4. 提交任务并清理
+    sbatch "$SBATCH_FILE" && rm -f "$SBATCH_FILE"
+}
+
+alias runlmp=submit_lmp_matpl
+alias rungpumd=submit_gpumd

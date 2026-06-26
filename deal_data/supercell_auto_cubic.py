@@ -1,3 +1,17 @@
+"""
+智能扩胞 — 根据目标原子数自动计算扩胞系数 / Smart supercell builder
+=====================================================================
+根据原子分布自动判断x/y/z方向的扩胞倍数，使总原子数接近目标值，
+并尽可能让盒子接近正方体形状。
+
+使用场景: 需要将小晶胞扩到特定规模(~10000原子)用于MD模拟时。
+          Automatically determines replication factors to reach target atom count.
+
+Usage: python supercell_auto_cubic.py <model.xyz> <target_number>
+Example: python supercell_auto_cubic.py model.xyz 10000
+Dependencies: numpy, ase
+Author: rebreath
+"""
 import math
 import numpy as np
 from ase.io import read, write

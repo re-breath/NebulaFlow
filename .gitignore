@@ -5,6 +5,7 @@ whl_files/
 .vscode/
 .git/
 .wink/
+.claude/
 # 忽略 lab 文件夹
 lab/
 

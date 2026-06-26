@@ -1,7 +1,18 @@
 #!/bin/source
 #from rebreath
-#本脚本的作用为使用vasp生成gpumd的训练集,并使用其生成初步的nep势
-#使用方法为bash Ctrl_auto_vasp_nep1.sh，使用后即可一键生成nep势
+# =============================================================================
+# 本脚本为 VASP→NEP 全自动工作流的主控脚本 / Full auto VASP→NEP workflow
+# 一键完成以下6个步骤 / One-click 6-step pipeline:
+#   1. AIMD模拟           / Run VASP AIMD
+#   2. XDATCAR→POSCAR拆分  / Extract configs from XDATCAR trajectory
+#   3. 批量单点能计算       / Batch single-point energy calculations
+#   4. OUTCAR→train.xyz   / Generate training set from OUTCAR
+#   5. 微扰构型+单点能      / Perturbation + single-point for diversity
+#   6. NEP势训练            / Train the initial NEP potential
+# 使用方法: bash Ctrl_auto_vasp_nep1.sh，使用后即可一键生成初步nep势
+# 使用场景: 从POSCAR出发，自动完成训练NEP势的全部流程
+# 注意: 需要提前准备好INCAR/POSCAR/POTCAR等VASP输入文件
+# =============================================================================
 #--------------------->workstation
 
 Temp="800 1000"      #设置想要跑AIMD的温度有哪些，举例Tem="1100 1200 1300"

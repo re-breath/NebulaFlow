@@ -1,4 +1,33 @@
-#该脚本使用来去除位力，平均能量大于一定值的构型
+"""
+NEP训练集 — 按平均位力筛选构型 / Filter training set by average virial
+==========================================================================
+该脚本使用来去除平均位力（对角线分量）不在指定范围内的构型。
+从xyz文件中提取每个构型的位力张量对角元(xx, yy, zz)，除以原子数得到
+每原子平均位力，筛选出三个分量均在 [min_virial, max_virial] 范围内的构型。
+
+功能 / What it does:
+  - 读取extxyz训练集文件 (使用ASE)
+  - 从注释行正则提取位力对角分量
+  - 检查 xx/yy/zz 是否均在范围内
+  - 输出 virial_fit.xyz 和 vir_unfit.xyz
+  - 生成位力分布直方图 virial_distribution.png (含 x/y/z 分量)
+
+使用场景 / When to use:
+  训练NEP前剔除极端应力状态的构型（如过度压缩/拉伸的构型位力会异常）。
+  Before NEP training, remove configurations with extreme stress states.
+
+使用方法 / Usage:
+  python elect_rely_virial.py <train.xyz> <min_virial> <max_virial>
+
+示例 / Example:
+  python elect_rely_virial.py train.xyz -50 50
+  # 筛选每原子位力对角分量在[-50, 50] eV/atom范围内的构型
+  # Output: virial_fit.xyz, vir_unfit.xyz, virial_distribution.png
+
+依赖 / Dependencies: numpy, ase, matplotlib
+Author: rebreath
+"""
+# 该脚本使用来去除位力不在指定范围内的构型
 import os
 import numpy as np
 import ase.io

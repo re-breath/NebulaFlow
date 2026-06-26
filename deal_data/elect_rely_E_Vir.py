@@ -1,4 +1,16 @@
-#该脚本使用来去除位力，平均能量大于一定值的构型
+"""
+NEP训练集 — 按能量+位力联合筛选 / Joint filter by energy & virial
+=====================================================================
+该脚本同时去除平均能量和平均位力不在指定范围内的构型。
+Combines energy and virial filtering in one pass.
+
+使用场景: 构建训练集时需同时确保能量和应力的物理合理性。
+Usage: python elect_rely_E_Vir.py <train.xyz> <min_E> <max_E> <min_virial> <max_virial>
+Example: python elect_rely_E_Vir.py train.xyz -10 -7 -50 50
+Dependencies: numpy, ase, matplotlib
+Author: rebreath
+"""
+#该脚本使用来去除平均能量和平均位力不在指定范围内的构型
 import os
 import numpy as np
 import ase.io

@@ -1,4 +1,33 @@
-#该脚本使用来去除位力，平均能量大于一定值的构型
+"""
+NEP训练集 — 按平均能量筛选构型 / Filter training set by average energy
+==========================================================================
+该脚本使用来去除平均能量不在指定范围内的构型。
+从xyz文件中读取每个构型的总能量，除以原子数得到每原子平均能量，
+筛选出平均值在 [min_E, max_E] 范围内的构型。
+
+功能 / What it does:
+  - 读取extxyz训练集文件 (使用ASE)
+  - 计算每个构型的平均能量 (总能量 / 原子数)
+  - 按阈值筛选，输出 energy_fited.xyz 和 energy_unfited.xyz
+  - 生成能量分布直方图 energy_distribution.png
+
+使用场景 / When to use:
+  训练NEP前，剔除DFT计算可能未收敛的构型（能量异常高或低）。
+  Before NEP training, remove configurations with unphysical energies
+  (e.g. unconverged DFT calculations).
+
+使用方法 / Usage:
+  python elect_rely_energy.py <train.xyz> <min_E> <max_E>
+
+示例 / Example:
+  python elect_rely_energy.py train.xyz -10.5 -8.0
+  # 筛选每原子平均能量在[-10.5, -8.0] eV/atom范围内的构型
+  # Output: energy_fited.xyz, energy_unfited.xyz, energy_distribution.png
+
+依赖 / Dependencies: numpy, ase, matplotlib
+Author: rebreath
+"""
+# 该脚本使用来去除平均能量不在指定范围内的构型
 import os
 import numpy as np
 import ase.io
